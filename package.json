@@ -10,12 +10,13 @@
   },
   "dependencies": {
     "@elevenlabs/elevenlabs-js": "^2.36.0",
+    "@neondatabase/auth": "^0.2.0-beta.1",
     "aegis-shield": "^1.1.0",
-    "better-auth": "^1.4.18",
     "drizzle-kit": "^0.31.9",
     "next": "16.1.6",
     "react": "19.2.3",
-    "react-dom": "19.2.3"
+    "react-dom": "19.2.3",
+    "zustand": "^5.0.11"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
