@@ -8,6 +8,12 @@ Component	Technology	Rationale
 Framework	Next.js 15 (TypeScript)	Server components for secure DB calls; API routes for the hydration pipeline.
 Database	Neon (Serverless Postgres)	Connection pooling built-in (crucial for Next.js serverless functions) and fast branching for dev environments.
 Authentication	Better Auth, easily integrates with Postgres, and supports custom session claims for Role-Based Access Control (RBAC).
+
+⚠️ Implementation note — Authentication vs. Authorization:
+The /api/elevenlabs/* routes currently enforce authentication (valid session required) but not full authorization. Two additional enforcement layers are pending the patients API:
+  1. Role-based: voice cloning (create/delete) must be restricted to admin role only. Nurses should not be able to create or remove biometric voice clones.
+  2. Org-based: TTS and voice delete must verify the requested voiceId belongs to a patient in the calling nurse's organization (nurses.org_id → patients.org_id). This prevents cross-facility access to cloned voices even for authenticated users.
+  The DB RLS policies enforce org isolation at the data layer, but the ElevenLabs layer operates outside Postgres and requires explicit application-level checks. These checks require a join on nurses → patients and must be added once the patients CRUD API is in place.
 Agentic Logic	VibeFlow	Handles the translation of clinical instructions to empathetic dialogue.
 Audio Generation	ElevenLabs React SDK	Bypasses HTTP polling; uses WebSockets to stream chunked audio to the client in milliseconds.
 PII Sanitization	aegis-shield (NPM)	Fast, zero-dependency tokenization to mask patient data before it hits the LLM.
