@@ -1,65 +1,196 @@
-import Image from "next/image";
+import React from "react";
+import {
+	Shield,
+	Zap,
+	Activity,
+	Mic,
+	Lock,
+	Heart,
+	Fingerprint,
+	CloudOff,
+	ArrowRight,
+	Play,
+	Check,
+} from "lucide-react";
+import "./landing.css";
 
-export default function Home() {
-  return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex min-h-screen w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
-    </div>
-  );
+export default function LandingPage() {
+	return (
+		<div className="landing-wrap">
+			{/* Navigation */}
+			<nav className="nav">
+				<div className="nav-inner">
+					<div className="nav-logo">CareScript</div>
+					<div className="nav-links">
+						<a href="#vision">Vision</a>
+						<a href="#capabilities">Capabilities</a>
+						<a href="#security">Privacy</a>
+					</div>
+				</div>
+			</nav>
+
+			{/* Hero Section */}
+			<header className="hero">
+				<div className="hero-glow"></div>
+				<div className="hero-content">
+					<div className="hero-eyebrow">CareScript · For Clinical Teams</div>
+					<h1 className="h1">
+						Care without <br />
+						<span className="h1-serif">compromise.</span>
+					</h1>
+					<p className="p-lead">
+						The world’s first dual-state operating system. <br />
+						Bridging clinical efficiency and human connection.
+					</p>
+					<div className="hero-actions">
+						<button className="btn-primary">Request Access</button>
+					</div>
+				</div>
+			</header>
+
+			{/* Vision Statement */}
+			<section className="section-vision" id="vision">
+				<div className="vision-container">
+					<h2 className="h2 centered">
+						Designed for the <br />
+						defining moments of care.
+					</h2>
+					<p className="p-body centered-text">
+						In the quiet moments, CareScript is an invisible scribe, documenting
+						every clinical detail. In the critical moments, it becomes a
+						familiar voice, de-escalating distress with the comfort of family.
+					</p>
+				</div>
+			</section>
+
+			{/* The Bento Grid - Refined Layout */}
+			<section className="section-grid" id="capabilities">
+				<div className="bento-grid">
+					{/* Card 1: Ambient Scribe (Wide, Light) */}
+					<div className="bento-card wide light-card">
+						<div className="card-top">
+							<div className="icon-box">
+								<Mic size={28} strokeWidth={1.5} />
+							</div>
+							<h3 className="h3">The Ambient Scribe.</h3>
+						</div>
+						<div className="card-bottom">
+							<p className="p-card">
+								CareScript listens passively during routine rounds, extracting
+								vital signs, observations, and care plans. It turns conversation
+								into compliant clinical documentation, instantly.
+							</p>
+							<div className="feature-tags">
+								<span className="tag">Automated Charting</span>
+								<span className="tag">Fact Extraction</span>
+								<span className="tag">Zero Data Entry</span>
+							</div>
+						</div>
+					</div>
+
+					{/* Card 2: Speed (Square, Light) */}
+					<div className="bento-card square light-card">
+						<div className="card-top">
+							<div className="icon-box blue">
+								<Zap size={28} strokeWidth={1.5} />
+							</div>
+						</div>
+						<div className="card-bottom">
+							<h3 className="h4">Instant Response.</h3>
+							<p className="p-small">
+								Latency so low, it feels like a natural conversation. Engineered
+								for the edge.
+							</p>
+						</div>
+					</div>
+
+					{/* Card 3: Security (Square, Light) */}
+					<div className="bento-card square light-card">
+						<div className="card-top">
+							<div className="icon-box green">
+								<Shield size={28} strokeWidth={1.5} />
+							</div>
+						</div>
+						<div className="card-bottom">
+							<h3 className="h4">Aegis Shield™.</h3>
+							<p className="p-small">
+								Identity masking ensures names never leave the device. HIPAA
+								Compliant by default.
+							</p>
+						</div>
+					</div>
+
+					{/* Card 4: Intervention (Wide, Dark) */}
+					<div className="bento-card wide dark-card">
+						<div className="card-bg-glow"></div>
+						<div className="card-content-relative">
+							<div className="card-top">
+								<div className="icon-box white">
+									<Heart size={28} strokeWidth={1.5} />
+								</div>
+								<h3 className="h3 text-white">Active Intervention.</h3>
+							</div>
+							<div className="card-bottom">
+								<p className="p-card text-white-alpha">
+									When agitation rises, the system translates clinical
+									instructions into the comforting, cloned voice of a loved one.
+								</p>
+								<div className="feature-tags">
+									<span className="tag dark">Voice Cloning</span>
+									<span className="tag dark">Crisis De-escalation</span>
+									<span className="tag dark">Emotional Intelligence</span>
+								</div>
+							</div>
+						</div>
+					</div>
+				</div>
+			</section>
+
+			{/* Privacy / Pipeline Section - Redesigned */}
+			<section className="section-privacy" id="security">
+				<div className="privacy-header">
+					<div className="label-text">Privacy Architecture</div>
+					<h2 className="h2">Zero-Trust. By Default.</h2>
+					<p className="p-body">
+						Patient data is sacred. Our proprietary isolation pipeline sanitizes
+						information <br /> before it ever touches the cloud.
+					</p>
+				</div>
+
+				<div className="pipeline-visual">
+					<div className="pipeline-card">
+						<div className="step-badge">01</div>
+						<h4 className="h5">Voice Input</h4>
+						<p className="p-tiny">Audio is captured locally on the device.</p>
+					</div>
+					<div className="connector"></div>
+					<div className="pipeline-card active">
+						<div className="step-badge blue">
+							<Check size={16} strokeWidth={3} />
+						</div>
+						<h4 className="h5">Local Redaction</h4>
+						<p className="p-tiny">PII is stripped via on-device ML models.</p>
+					</div>
+					<div className="connector"></div>
+					<div className="pipeline-card">
+						<div className="step-badge">03</div>
+						<h4 className="h5">Encrypted Cloud</h4>
+						<p className="p-tiny">Only anonymized tokens leave the facility.</p>
+					</div>
+				</div>
+			</section>
+
+			{/* Minimal Footer */}
+			<footer className="footer">
+				<div className="footer-logo">CareScript</div>
+				<div className="footer-links">
+					<a href="#">Company</a>
+					<a href="#">Platform</a>
+					<a href="#">Legal</a>
+					<a href="#">Contact</a>
+				</div>
+				<p className="copyright">© 2026 CareScript Inc. All rights reserved.</p>
+			</footer>
+		</div>
+	);
 }
