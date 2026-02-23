@@ -3,6 +3,7 @@ import { AuthView } from '@neondatabase/auth/react';
 import { useSession } from '@/lib/auth/client';
 import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
+import { AuthShell } from '../auth-shell';
 
 export default function SignUpPage() {
   const { data } = useSession();
@@ -14,5 +15,9 @@ export default function SignUpPage() {
     }
   }, [data, router]);
 
-  return <AuthView pathname="sign-up" />;
+  return (
+    <AuthShell variant="sign-up">
+      <AuthView className="auth-view-card" pathname="sign-up" />
+    </AuthShell>
+  );
 }

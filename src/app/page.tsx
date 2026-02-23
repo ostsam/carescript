@@ -1,20 +1,11 @@
-import React from "react";
-import {
-	Shield,
-	Zap,
-	Activity,
-	Mic,
-	Lock,
-	Heart,
-	Fingerprint,
-	CloudOff,
-	ArrowRight,
-	Play,
-	Check,
-} from "lucide-react";
+"use client";
+import { Shield, Zap, Mic, Heart, Check } from "lucide-react";
 import "./landing.css";
+import { useRouter } from "next/navigation";
 
-export default function LandingPage() {
+function LandingPage() {
+	const router = useRouter();
+
 	return (
 		<div className="landing-wrap">
 			{/* Navigation */}
@@ -43,7 +34,13 @@ export default function LandingPage() {
 						Bridging clinical efficiency and human connection.
 					</p>
 					<div className="hero-actions">
-						<button className="btn-primary">Request Access</button>
+						<button className="btn-text">Request Access</button>
+						<button
+							className="btn-primary"
+							onClick={() => router.push("/auth/sign-in")}
+						>
+							Sign In
+						</button>
 					</div>
 				</div>
 			</header>
@@ -194,3 +191,5 @@ export default function LandingPage() {
 		</div>
 	);
 }
+
+export default LandingPage;
