@@ -8,6 +8,13 @@
       "when": 1771631964352,
       "tag": "0000_brainy_puma",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1771877687408,
+      "tag": "0001_next_magik",
+      "breakpoints": true
     }
   ]
 }
