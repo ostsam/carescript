@@ -3,6 +3,7 @@ import { AuthView } from '@neondatabase/auth/react';
 import { useSession } from '@/lib/auth/client';
 import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
+import { AuthShell } from '../auth-shell';
 
 export default function SignInPage() {
   const { data } = useSession();
@@ -14,5 +15,9 @@ export default function SignInPage() {
     }
   }, [data, router]);
 
-  return <AuthView pathname="sign-in" />;
+  return (
+    <AuthShell variant="sign-in">
+      <AuthView className="auth-view-card" pathname="sign-in" />
+    </AuthShell>
+  );
 }
