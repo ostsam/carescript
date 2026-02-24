@@ -6,7 +6,7 @@ import {
   patients,
   nurses,
 } from "@/lib/db/schema";
-import { eq, desc } from "drizzle-orm";
+import { and, asc, countDistinct, desc, eq, ilike, or, sql } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { HugeiconsIcon } from "@hugeicons/react";
@@ -21,11 +21,20 @@ import {
   Table,
   TableBody,
   TableCell,
-  TableHead,
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import {
+  SortableHead,
+  TablePagination,
+  TableSearchBar,
+} from "@/components/tables/table-controls";
+import {
+  getTableParams,
+  TABLE_PAGE_SIZE,
+  type TableSearchParams,
+} from "@/lib/table-params";
 
 function relativeDate(date: Date): string {
   const now = new Date();
@@ -46,15 +55,108 @@ function relativeDate(date: Date): string {
   return "Just now";
 }
 
-export default async function ReviewPage() {
+type PageProps = {
+  searchParams: Promise<TableSearchParams>;
+};
+
+export default async function ReviewPage({ searchParams }: PageProps) {
   const { data: session } = await auth.getSession();
 
   if (!session?.user) {
     redirect("/auth/sign-in");
   }
 
-  const rows = await withAuth(session.user.id, async (tx) => {
-    return tx
+  const params = await searchParams;
+
+  const { query, sortKey, sortDirection, page } = getTableParams(
+    params,
+    {
+      defaultSortKey: "created",
+      allowedSortKeys: [
+        "patient",
+        "status",
+        "type",
+        "preview",
+        "nurse",
+        "created",
+      ],
+      defaultSortDirection: "desc",
+    }
+  );
+
+  const statusText = sql`${clinicalNotes.status}::text`;
+  const interactionTypeText = sql`${transcripts.interactionType}::text`;
+  const searchFilter = query
+    ? or(
+        ilike(patients.patientFirstName, `%${query}%`),
+        ilike(patients.patientLastName, `%${query}%`),
+        ilike(nurses.nurseFirstName, `%${query}%`),
+        ilike(nurses.nurseLastName, `%${query}%`),
+        ilike(clinicalNotes.subjectiveText, `%${query}%`),
+        ilike(statusText, `%${query}%`),
+        ilike(interactionTypeText, `%${query}%`)
+      )
+    : undefined;
+
+  const {
+    rows,
+    totalCount,
+    currentPage,
+    totalPages,
+    draftCount,
+  } = await withAuth(session.user.id, async (tx) => {
+    const totalResult = await tx
+      .select({ total: countDistinct(clinicalNotes.id) })
+      .from(clinicalNotes)
+      .innerJoin(transcripts, eq(clinicalNotes.transcriptId, transcripts.id))
+      .innerJoin(patients, eq(transcripts.patientId, patients.id))
+      .innerJoin(nurses, eq(transcripts.nurseId, nurses.id))
+      .where(searchFilter);
+
+    const draftResult = await tx
+      .select({ total: countDistinct(clinicalNotes.id) })
+      .from(clinicalNotes)
+      .innerJoin(transcripts, eq(clinicalNotes.transcriptId, transcripts.id))
+      .innerJoin(patients, eq(transcripts.patientId, patients.id))
+      .innerJoin(nurses, eq(transcripts.nurseId, nurses.id))
+      .where(
+        searchFilter
+          ? and(searchFilter, eq(clinicalNotes.status, "Draft"))
+          : eq(clinicalNotes.status, "Draft")
+      );
+
+    const totalCount = Number(totalResult[0]?.total ?? 0);
+    const draftCount = Number(draftResult[0]?.total ?? 0);
+    const totalPages = Math.max(1, Math.ceil(totalCount / TABLE_PAGE_SIZE));
+    const currentPage = Math.min(page, totalPages);
+    const offset = (currentPage - 1) * TABLE_PAGE_SIZE;
+
+    const sortOrder = sortDirection === "asc" ? asc : desc;
+    const orderBy = (() => {
+      switch (sortKey) {
+        case "patient":
+          return [
+            sortOrder(patients.patientLastName),
+            sortOrder(patients.patientFirstName),
+          ];
+        case "status":
+          return [sortOrder(clinicalNotes.status)];
+        case "type":
+          return [sortOrder(transcripts.interactionType)];
+        case "preview":
+          return [sortOrder(clinicalNotes.subjectiveText)];
+        case "nurse":
+          return [
+            sortOrder(nurses.nurseLastName),
+            sortOrder(nurses.nurseFirstName),
+          ];
+        case "created":
+        default:
+          return [sortOrder(clinicalNotes.createdAt)];
+      }
+    })();
+
+    const rows = await tx
       .select({
         noteId: clinicalNotes.id,
         status: clinicalNotes.status,
@@ -70,10 +172,17 @@ export default async function ReviewPage() {
       .innerJoin(transcripts, eq(clinicalNotes.transcriptId, transcripts.id))
       .innerJoin(patients, eq(transcripts.patientId, patients.id))
       .innerJoin(nurses, eq(transcripts.nurseId, nurses.id))
-      .orderBy(desc(clinicalNotes.createdAt));
+      .where(searchFilter)
+      .orderBy(...orderBy)
+      .limit(TABLE_PAGE_SIZE)
+      .offset(offset);
+
+    return { rows, totalCount, currentPage, totalPages, draftCount };
   });
 
-  const draftCount = rows.filter((r) => r.status === "Draft").length;
+  const showingStart =
+    totalCount === 0 ? 0 : (currentPage - 1) * TABLE_PAGE_SIZE + 1;
+  const showingEnd = Math.min(currentPage * TABLE_PAGE_SIZE, totalCount);
 
   return (
     <>
@@ -84,7 +193,7 @@ export default async function ReviewPage() {
             Review Queue
           </h1>
           <Badge variant="secondary" className="tabular-nums">
-            {rows.length}
+            {totalCount}
           </Badge>
           {draftCount > 0 && (
             <Badge variant="outline" className="tabular-nums">
@@ -95,18 +204,70 @@ export default async function ReviewPage() {
       </div>
 
       {/* Content */}
-      {rows.length > 0 ? (
+      {totalCount > 0 ? (
         <Card>
           <CardContent className="p-0">
+            <TableSearchBar
+              searchParams={params}
+              query={query}
+              sortKey={sortKey}
+              sortDirection={sortDirection}
+              placeholder="Search patients, nurses, or notes..."
+              totalCount={totalCount}
+              showingStart={showingStart}
+              showingEnd={showingEnd}
+            />
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Patient</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Type</TableHead>
-                  <TableHead>Note Preview</TableHead>
-                  <TableHead>Nurse</TableHead>
-                  <TableHead>Created</TableHead>
+                  <SortableHead
+                    label="Patient"
+                    sortKey="patient"
+                    activeSort={sortKey}
+                    direction={sortDirection}
+                    defaultDir="asc"
+                    searchParams={params}
+                  />
+                  <SortableHead
+                    label="Status"
+                    sortKey="status"
+                    activeSort={sortKey}
+                    direction={sortDirection}
+                    defaultDir="asc"
+                    searchParams={params}
+                  />
+                  <SortableHead
+                    label="Type"
+                    sortKey="type"
+                    activeSort={sortKey}
+                    direction={sortDirection}
+                    defaultDir="asc"
+                    searchParams={params}
+                  />
+                  <SortableHead
+                    label="Note Preview"
+                    sortKey="preview"
+                    activeSort={sortKey}
+                    direction={sortDirection}
+                    defaultDir="asc"
+                    searchParams={params}
+                  />
+                  <SortableHead
+                    label="Nurse"
+                    sortKey="nurse"
+                    activeSort={sortKey}
+                    direction={sortDirection}
+                    defaultDir="asc"
+                    searchParams={params}
+                  />
+                  <SortableHead
+                    label="Created"
+                    sortKey="created"
+                    activeSort={sortKey}
+                    direction={sortDirection}
+                    defaultDir="desc"
+                    searchParams={params}
+                  />
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -174,15 +335,39 @@ export default async function ReviewPage() {
               </TableBody>
             </Table>
           </CardContent>
+          <TablePagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            searchParams={params}
+          />
         </Card>
       ) : (
-        <EmptyState />
+        <EmptyState query={query} />
       )}
     </>
   );
 }
 
-function EmptyState() {
+function EmptyState({ query }: { query: string }) {
+  if (query) {
+    return (
+      <Card>
+        <CardContent>
+          <div className="flex flex-col items-center justify-center py-16 text-center">
+            <h3 className="text-base font-medium">No matching notes</h3>
+            <p className="mt-1 max-w-sm text-sm text-muted-foreground">
+              Try adjusting your search terms or clear the search to see all
+              notes.
+            </p>
+            <Button className="mt-5 rounded-full" variant="outline" asChild>
+              <Link href="/dashboard/review">Clear search</Link>
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
   return (
     <Card>
       <CardContent>

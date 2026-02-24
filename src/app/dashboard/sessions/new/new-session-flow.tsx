@@ -14,7 +14,7 @@ import {
   HeadphonesIcon,
   Loading03Icon,
 } from "@hugeicons/core-free-icons";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
@@ -273,9 +273,9 @@ function SetupStep({
       </div>
 
       <Card>
-        <CardContent className="space-y-6 pt-6">
+        <CardContent className="space-y-8 pt-8 pb-6">
           {/* Patient selector */}
-          <div className="space-y-2">
+          <div className="space-y-3">
             <Label>Patient</Label>
             <Combobox
               value={selectedPatientId}
@@ -324,13 +324,13 @@ function SetupStep({
           </div>
 
           {/* Mode selector */}
-          <div className="space-y-2">
+          <div className="space-y-4">
             <Label>Session Type</Label>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid gap-5 md:grid-cols-2">
               <button
                 type="button"
                 onClick={() => onModeChange("Routine")}
-                className={`relative flex flex-col items-center gap-2 rounded-xl border-2 p-5 text-center transition-colors ${
+                className={`relative flex min-h-[150px] flex-col items-center gap-3 rounded-2xl border-2 p-6 text-center transition-colors ${
                   mode === "Routine"
                     ? "border-primary bg-primary/5"
                     : "border-border hover:border-muted-foreground/30"
@@ -346,7 +346,7 @@ function SetupStep({
                   <HugeiconsIcon icon={Stethoscope02Icon} size={20} />
                 </div>
                 <span className="text-sm font-medium">Routine</span>
-                <span className="text-xs text-muted-foreground">
+                <span className="text-xs text-muted-foreground leading-relaxed">
                   Ambient scribe for daily care
                 </span>
               </button>
@@ -354,7 +354,7 @@ function SetupStep({
               <button
                 type="button"
                 onClick={() => onModeChange("Intervention")}
-                className={`relative flex flex-col items-center gap-2 rounded-xl border-2 p-5 text-center transition-colors ${
+                className={`relative flex min-h-[150px] flex-col items-center gap-3 rounded-2xl border-2 p-6 text-center transition-colors ${
                   mode === "Intervention"
                     ? "border-primary bg-primary/5"
                     : "border-border hover:border-muted-foreground/30"
@@ -375,11 +375,11 @@ function SetupStep({
                   <HugeiconsIcon icon={HeadphonesIcon} size={20} />
                 </div>
                 <span className="text-sm font-medium">Intervention</span>
-                <span className="text-xs text-muted-foreground">
+                <span className="text-xs text-muted-foreground leading-relaxed">
                   Crisis de-escalation with voice
                 </span>
                 {selectedPatient && !selectedPatient.hasVoice && mode === "Intervention" && (
-                  <span className="text-[10px] text-amber-600 mt-1">
+                  <span className="text-[10px] text-amber-600 mt-2">
                     No voice clone for this patient
                   </span>
                 )}
@@ -408,18 +408,18 @@ function SetupStep({
               </p>
             </div>
           )}
-
-          {/* Start button */}
+        </CardContent>
+        <CardFooter className="flex items-center justify-end border-t px-6 py-5">
           <Button
             size="lg"
-            className="w-full rounded-full shadow-sm shadow-primary/25"
+            className="w-full rounded-full shadow-sm shadow-primary/25 sm:w-auto"
             disabled={!canStart}
             onClick={onStart}
           >
             <HugeiconsIcon icon={Mic01Icon} data-icon="inline-start" />
             Start Recording
           </Button>
-        </CardContent>
+        </CardFooter>
       </Card>
     </>
   );
