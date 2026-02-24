@@ -1,4 +1,12 @@
 import { auth } from "@/lib/auth/server";
+import { withAuth } from "@/lib/db";
+import {
+  patients,
+  transcripts,
+  nurses,
+  clinicalNotes,
+} from "@/lib/db/schema";
+import { and, count, desc, eq, gte, lt } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import { HugeiconsIcon } from "@hugeicons/react";
 import {
@@ -39,6 +47,85 @@ export default async function DashboardPage() {
 
   const firstName = session.user.name?.split(" ")[0] ?? "there";
   const greeting = getGreeting();
+  const now = new Date();
+  const startOfDay = new Date(now);
+  startOfDay.setHours(0, 0, 0, 0);
+  const endOfDay = new Date(now);
+  endOfDay.setHours(24, 0, 0, 0);
+
+  const {
+    patientCount,
+    sessionsTodayCount,
+    pendingReviewCount,
+    approvedTodayCount,
+    recentActivity,
+  } = await withAuth(session.user.id, async (tx) => {
+    const [patientTotal] = await tx
+      .select({ total: count() })
+      .from(patients);
+
+    const [sessionsTodayTotal] = await tx
+      .select({ total: count() })
+      .from(transcripts)
+      .where(
+        and(
+          gte(transcripts.timestamp, startOfDay),
+          lt(transcripts.timestamp, endOfDay),
+        ),
+      );
+
+    const [pendingReviewTotal] = await tx
+      .select({ total: count() })
+      .from(clinicalNotes)
+      .where(eq(clinicalNotes.status, "Draft"));
+
+    const [approvedTodayTotal] = await tx
+      .select({ total: count() })
+      .from(clinicalNotes)
+      .where(
+        and(
+          eq(clinicalNotes.status, "Approved_by_Nurse"),
+          gte(clinicalNotes.createdAt, startOfDay),
+          lt(clinicalNotes.createdAt, endOfDay),
+        ),
+      );
+
+    const recentActivity = await tx
+      .select({
+        id: transcripts.id,
+        interactionType: transcripts.interactionType,
+        timestamp: transcripts.timestamp,
+        patientFirstName: patients.patientFirstName,
+        patientLastName: patients.patientLastName,
+        nurseFirstName: nurses.nurseFirstName,
+        nurseLastName: nurses.nurseLastName,
+        noteStatus: clinicalNotes.status,
+      })
+      .from(transcripts)
+      .innerJoin(patients, eq(transcripts.patientId, patients.id))
+      .innerJoin(nurses, eq(transcripts.nurseId, nurses.id))
+      .leftJoin(clinicalNotes, eq(clinicalNotes.transcriptId, transcripts.id))
+      .orderBy(desc(transcripts.timestamp))
+      .limit(5);
+
+    return {
+      patientCount: Number(patientTotal?.total ?? 0),
+      sessionsTodayCount: Number(sessionsTodayTotal?.total ?? 0),
+      pendingReviewCount: Number(pendingReviewTotal?.total ?? 0),
+      approvedTodayCount: Number(approvedTodayTotal?.total ?? 0),
+      recentActivity,
+    };
+  });
+
+  const activity = recentActivity.map((row) => ({
+    id: row.id,
+    patientName: `${row.patientFirstName} ${row.patientLastName}`,
+    patientInitials: `${row.patientFirstName[0] ?? ""}${row.patientLastName[0] ?? ""}`.toUpperCase(),
+    interactionType: row.interactionType,
+    nurseName: `${row.nurseFirstName} ${row.nurseLastName}`,
+    timestamp: relativeDate(row.timestamp),
+    noteStatus: row.noteStatus,
+  }));
 
   return (
     <>
@@ -78,28 +165,28 @@ export default async function DashboardPage() {
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard
           title="My Patients"
-          value="—"
+          value={patientCount.toString()}
           description="Under your care"
           icon={PatientIcon}
           iconBg="bg-primary/10 text-primary"
         />
         <StatCard
           title="Sessions Today"
-          value="—"
+          value={sessionsTodayCount.toString()}
           description="Recorded today"
           icon={Mic01Icon}
           iconBg="bg-chart-2/20 text-chart-3"
         />
         <StatCard
           title="Pending Review"
-          value="—"
+          value={pendingReviewCount.toString()}
           description="Draft notes to approve"
           icon={CheckListIcon}
           iconBg="bg-amber-100 text-amber-700"
         />
         <StatCard
           title="Approved Today"
-          value="—"
+          value={approvedTodayCount.toString()}
           description="Notes signed off"
           icon={CheckmarkCircle01Icon}
           iconBg="bg-emerald-100 text-emerald-700"
@@ -107,7 +194,7 @@ export default async function DashboardPage() {
       </div>
 
       {/* Recent Activity */}
-      <RecentActivitySection activity={[]} />
+      <RecentActivitySection activity={activity} />
 
       {/* Quick Actions */}
       <div className="grid gap-4 sm:grid-cols-3">
@@ -139,6 +226,25 @@ function getGreeting(): string {
   if (hour < 12) return "Good morning";
   if (hour < 17) return "Good afternoon";
   return "Good evening";
+}
+
+function relativeDate(date: Date): string {
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffMin = Math.floor(diffMs / (1000 * 60));
+  const diffHr = Math.floor(diffMin / 60);
+  const diffDays = Math.floor(diffHr / 24);
+
+  if (diffDays > 30)
+    return date.toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
+  if (diffDays > 0) return `${diffDays}d ago`;
+  if (diffHr > 0) return `${diffHr}h ago`;
+  if (diffMin > 0) return `${diffMin}m ago`;
+  return "Just now";
 }
 
 function StatCard({
