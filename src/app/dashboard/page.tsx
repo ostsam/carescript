@@ -66,7 +66,7 @@ export default async function DashboardPage() {
             </Link>
           </Button>
           <Button size="default" className="rounded-full shadow-sm shadow-primary/25" asChild>
-            <Link href="/dashboard/sessions">
+            <Link href="/dashboard/sessions/new">
               <HugeiconsIcon icon={PlusSignIcon} data-icon="inline-start" />
               New Session
             </Link>
@@ -114,7 +114,7 @@ export default async function DashboardPage() {
         <QuickActionCard
           title="Start a Session"
           description="Begin an ambient scribe recording for a patient interaction."
-          href="/dashboard/sessions"
+          href="/dashboard/sessions/new"
           label="Record"
         />
         <QuickActionCard
@@ -224,7 +224,7 @@ function EmptyState() {
         auto-generated clinical notes here.
       </p>
       <Button size="default" className="mt-4 rounded-full shadow-sm shadow-primary/25" asChild>
-        <Link href="/dashboard/sessions">
+        <Link href="/dashboard/sessions/new">
           <HugeiconsIcon icon={PlusSignIcon} data-icon="inline-start" />
           Start Session
         </Link>

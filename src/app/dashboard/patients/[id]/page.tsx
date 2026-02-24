@@ -178,7 +178,7 @@ export default async function PatientProfilePage({ params }: Props) {
           </div>
           <div className="flex gap-2">
             <Button variant="outline" size="sm" className="rounded-full" asChild>
-              <Link href="/dashboard/sessions">
+              <Link href={`/dashboard/sessions/new?patientId=${patient.id}`}>
                 <HugeiconsIcon icon={Mic01Icon} data-icon="inline-start" />
                 New Session
               </Link>
