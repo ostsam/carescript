@@ -5,6 +5,7 @@ import { withAuth } from "@/lib/db";
 import { patients, nurses } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
+import { deleteVoice } from "@/lib/elevenlabs";
 
 const VALID_RELATIONS = ["Spouse", "Son", "Daughter", "Sibling", "Friend", "Other"] as const;
 
@@ -90,5 +91,77 @@ export async function updatePatientVoice(
   });
 
   revalidatePath("/dashboard/patients");
+  revalidatePath(`/dashboard/patients/${patientId}`);
+  return { success: true };
+}
+
+type UpdateLovedOneResult =
+  | { success: true }
+  | { success: false; error: string };
+
+export async function updateLovedOneName(
+  patientId: string,
+  lovedOneFirstName: string,
+  lovedOneLastName: string,
+): Promise<UpdateLovedOneResult> {
+  const { data: session } = await auth.getSession();
+
+  if (!session?.user) {
+    return { success: false, error: "Not authenticated" };
+  }
+
+  const first = lovedOneFirstName?.toString().trim();
+  const last = lovedOneLastName?.toString().trim();
+
+  if (!patientId || !first || !last) {
+    return { success: false, error: "Loved one first and last name are required" };
+  }
+
+  await withAuth(session.user.id, async (tx) => {
+    await tx
+      .update(patients)
+      .set({ lovedOneFirstName: first, lovedOneLastName: last })
+      .where(eq(patients.id, patientId));
+  });
+
+  revalidatePath("/dashboard/patients");
+  revalidatePath(`/dashboard/patients/${patientId}`);
+  return { success: true };
+}
+
+type DeleteVoiceResult =
+  | { success: true }
+  | { success: false; error: string };
+
+export async function deletePatientVoice(
+  patientId: string,
+  voiceId: string,
+): Promise<DeleteVoiceResult> {
+  const { data: session } = await auth.getSession();
+
+  if (!session?.user) {
+    return { success: false, error: "Not authenticated" };
+  }
+
+  if (!patientId || !voiceId) {
+    return { success: false, error: "Patient ID and Voice ID are required" };
+  }
+
+  try {
+    await deleteVoice(voiceId);
+  } catch (err) {
+    console.error(`[Voices] Failed to delete voice ${voiceId}:`, err);
+    return { success: false, error: "Failed to delete voice" };
+  }
+
+  await withAuth(session.user.id, async (tx) => {
+    await tx
+      .update(patients)
+      .set({ elevenlabsVoiceId: null })
+      .where(eq(patients.id, patientId));
+  });
+
+  revalidatePath("/dashboard/patients");
+  revalidatePath(`/dashboard/patients/${patientId}`);
   return { success: true };
 }

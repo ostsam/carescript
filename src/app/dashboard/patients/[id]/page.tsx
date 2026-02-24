@@ -17,7 +17,6 @@ import {
   Calendar03Icon,
   UserLoveIcon,
   VoiceIcon,
-  CheckmarkCircle01Icon,
 } from "@hugeicons/core-free-icons";
 import {
   Card,
@@ -37,6 +36,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { VoiceCloneCard } from "./voice-clone-card";
 
 function relativeDate(date: Date): string {
   const now = new Date();
@@ -318,27 +318,15 @@ export default async function PatientProfilePage({ params }: Props) {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="flex items-center gap-4">
-            <div className="flex size-12 items-center justify-center rounded-full bg-primary/10">
-              <HugeiconsIcon icon={VoiceIcon} size={22} className="text-primary" />
-            </div>
-            <div className="flex-1">
-              {patient.elevenlabsVoiceId ? (
-                <div className="flex items-center gap-2">
-                  <HugeiconsIcon icon={CheckmarkCircle01Icon} size={16} className="text-emerald-600" />
-                  <span className="text-sm font-medium">Voice clone active</span>
-                  <Badge variant="secondary" className="text-[10px] font-mono">
-                    {patient.elevenlabsVoiceId.slice(0, 12)}…
-                  </Badge>
-                </div>
-              ) : (
-                <p className="text-sm text-muted-foreground">
-                  Record a sample of {lovedOneName}&apos;s voice to enable voice-based interventions for{" "}
-                  {patient.patientFirstName}.
-                </p>
-              )}
-            </div>
-          </div>
+          <VoiceCloneCard
+            patientId={patient.id}
+            patientFirstName={patient.patientFirstName}
+            patientLastName={patient.patientLastName}
+            lovedOneFirstName={patient.lovedOneFirstName}
+            lovedOneLastName={patient.lovedOneLastName}
+            lovedOneRelation={patient.lovedOneRelation}
+            voiceId={patient.elevenlabsVoiceId}
+          />
         </CardContent>
       </Card>
     </>
