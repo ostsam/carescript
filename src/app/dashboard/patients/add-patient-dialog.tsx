@@ -180,6 +180,40 @@ function DetailsStep({
 							/>
 						</div>
 					</div>
+					<div className="grid grid-cols-2 gap-3">
+						<div className="grid gap-1.5">
+							<Label htmlFor="dateOfBirth">Date of birth</Label>
+							<Input id="dateOfBirth" name="dateOfBirth" type="date" />
+						</div>
+						<div className="grid gap-1.5">
+							<Label htmlFor="sex">Sex</Label>
+							<Input id="sex" name="sex" placeholder="e.g. Female" />
+						</div>
+					</div>
+					<div className="grid grid-cols-2 gap-3">
+						<div className="grid gap-1.5">
+							<Label htmlFor="codeStatus">Code status</Label>
+							<Input id="codeStatus" name="codeStatus" placeholder="e.g. DNR" />
+						</div>
+						<div className="grid gap-1.5">
+							<Label htmlFor="admitDate">Admit date</Label>
+							<Input id="admitDate" name="admitDate" type="date" />
+						</div>
+					</div>
+					<div className="grid grid-cols-3 gap-3">
+						<div className="grid gap-1.5">
+							<Label htmlFor="roomLabel">Room</Label>
+							<Input id="roomLabel" name="roomLabel" placeholder="e.g. 204" />
+						</div>
+						<div className="grid gap-1.5">
+							<Label htmlFor="bedLabel">Bed</Label>
+							<Input id="bedLabel" name="bedLabel" placeholder="e.g. B" />
+						</div>
+						<div className="grid gap-1.5">
+							<Label htmlFor="primaryPayor">Primary payor</Label>
+							<Input id="primaryPayor" name="primaryPayor" placeholder="e.g. Medicare" />
+						</div>
+					</div>
 				</div>
 
 				<div className="grid gap-3">
