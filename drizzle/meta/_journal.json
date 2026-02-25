@@ -15,6 +15,20 @@
       "when": 1771877687408,
       "tag": "0001_next_magik",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1771921699108,
+      "tag": "0002_boring_onslaught",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1771968280354,
+      "tag": "0003_ambiguous_nebula",
+      "breakpoints": true
     }
   ]
 }

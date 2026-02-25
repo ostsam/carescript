@@ -45,6 +45,8 @@ export async function saveSession(
   patientId: string,
   interactionType: "Routine" | "Intervention",
   rawTranscript: string,
+  audioBase64?: string | null,
+  audioMimeType?: string | null,
 ): Promise<SaveSessionResult> {
   const { data: session } = await auth.getSession();
 
@@ -69,6 +71,11 @@ export async function saveSession(
     return { success: false, error: "Could not determine your nurse record" };
   }
 
+  const audioBlob =
+    audioBase64 && audioBase64.length > 0
+      ? Buffer.from(audioBase64, "base64")
+      : null;
+
   const [inserted] = await withAuth(session.user.id, async (tx) => {
     return tx
       .insert(transcripts)
@@ -77,6 +84,8 @@ export async function saveSession(
         nurseId: nurse.id,
         interactionType,
         rawTranscript: rawTranscript.trim(),
+        audioBlob: audioBlob ?? undefined,
+        audioMimeType: audioMimeType ?? undefined,
       })
       .returning({ id: transcripts.id });
   });

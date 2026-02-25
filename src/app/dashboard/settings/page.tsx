@@ -5,6 +5,7 @@ import { eq } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import { Separator } from "@/components/ui/separator";
 import { ChangePasswordForm } from "./change-password-form";
+import { CalibrationClipSection } from "./calibration-clip-section";
 
 export default async function SettingsPage() {
 	const { data: session } = await auth.getSession();
@@ -74,6 +75,10 @@ export default async function SettingsPage() {
 					<InfoRow label="Member since" value={memberSince} />
 				</dl>
 			</section>
+
+			<Separator />
+
+			<CalibrationClipSection />
 
 			<Separator />
 
