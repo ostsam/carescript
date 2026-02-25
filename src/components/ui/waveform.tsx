@@ -385,6 +385,10 @@ export type AudioScrubberProps = WaveformProps & {
 	showHandle?: boolean;
 };
 
+// #region agent log
+const _dbgScrub = (msg: string, data: Record<string, unknown>) => fetch('http://127.0.0.1:7276/ingest/a9aae397-52ab-48ec-9c08-4a6fe0624065',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'b3c54d'},body:JSON.stringify({sessionId:'b3c54d',location:'waveform.tsx:AudioScrubber',message:msg,data,timestamp:Date.now()})}).catch(()=>{});
+// #endregion
+
 export const AudioScrubber = ({
 	data = [],
 	currentTime = 0,
@@ -426,6 +430,9 @@ export const AudioScrubber = ({
 			const x = Math.max(0, Math.min(clientX - rect.left, rect.width));
 			const progress = x / rect.width;
 			const newTime = progress * duration;
+			// #region agent log
+			_dbgScrub('handleScrub', {hypothesisId:'B',duration,progress,newTime,isFiniteNewTime:Number.isFinite(newTime)});
+			// #endregion
 
 			setLocalProgress(progress);
 			onSeek?.(newTime);

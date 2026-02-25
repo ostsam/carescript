@@ -53,6 +53,57 @@ const buildWaveformData = (audioBuffer: AudioBuffer) => {
 	return waveform.map((value) => Math.min(1, value / max));
 };
 
+const writeString = (view: DataView, offset: number, str: string) => {
+	for (let i = 0; i < str.length; i++) {
+		view.setUint8(offset + i, str.charCodeAt(i));
+	}
+};
+
+const audioBufferToWavBlob = (buffer: AudioBuffer): Blob => {
+	const numChannels = buffer.numberOfChannels;
+	const sampleRate = buffer.sampleRate;
+	const length = buffer.length;
+	const bytesPerSample = 2;
+	const dataLength = length * numChannels * bytesPerSample;
+	const totalLength = 44 + dataLength;
+
+	const arrayBuffer = new ArrayBuffer(totalLength);
+	const view = new DataView(arrayBuffer);
+
+	writeString(view, 0, "RIFF");
+	view.setUint32(4, totalLength - 8, true);
+	writeString(view, 8, "WAVE");
+	writeString(view, 12, "fmt ");
+	view.setUint32(16, 16, true);
+	view.setUint16(20, 1, true);
+	view.setUint16(22, numChannels, true);
+	view.setUint32(24, sampleRate, true);
+	view.setUint32(28, sampleRate * numChannels * bytesPerSample, true);
+	view.setUint16(32, numChannels * bytesPerSample, true);
+	view.setUint16(34, 8 * bytesPerSample, true);
+	writeString(view, 36, "data");
+	view.setUint32(40, dataLength, true);
+
+	let offset = 44;
+	for (let i = 0; i < length; i++) {
+		for (let ch = 0; ch < numChannels; ch++) {
+			const sample = Math.max(-1, Math.min(1, buffer.getChannelData(ch)[i]));
+			view.setInt16(
+				offset,
+				sample < 0 ? sample * 0x8000 : sample * 0x7fff,
+				true,
+			);
+			offset += 2;
+		}
+	}
+
+	return new Blob([arrayBuffer], { type: "audio/wav" });
+};
+
+// #region agent log
+const _dbg = (msg: string, data: Record<string, unknown>) => fetch('http://127.0.0.1:7276/ingest/a9aae397-52ab-48ec-9c08-4a6fe0624065',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'b3c54d'},body:JSON.stringify({sessionId:'b3c54d',location:'calibration-clip-player.tsx',message:msg,data,timestamp:Date.now()})}).catch(()=>{});
+// #endregion
+
 export function CalibrationClipPlayer({
 	audioUrl,
 	blob,
@@ -66,13 +117,13 @@ export function CalibrationClipPlayer({
 	const [decodedDuration, setDecodedDuration] = useState(0);
 	const [isPlaying, setIsPlaying] = useState(false);
 	const [isDecoding, setIsDecoding] = useState(false);
+	const [wavUrl, setWavUrl] = useState<string | null>(null);
 
 	useEffect(() => {
 		const audio = audioRef.current;
 		if (audio) {
 			audio.pause();
 			audio.currentTime = 0;
-			audio.load();
 		}
 		setCurrentTime(0);
 		setDuration(0);
@@ -82,9 +133,12 @@ export function CalibrationClipPlayer({
 
 	useEffect(() => {
 		let isCancelled = false;
+		let objectUrl: string | null = null;
+
 		const decode = async () => {
 			if (!blob) {
 				setWaveformData([]);
+				setWavUrl(null);
 				return;
 			}
 
@@ -101,11 +155,19 @@ export function CalibrationClipPlayer({
 				if (!isCancelled) {
 					setWaveformData(buildWaveformData(audioBuffer));
 					setDecodedDuration(audioBuffer.duration || 0);
+
+					const wavBlob = audioBufferToWavBlob(audioBuffer);
+					objectUrl = URL.createObjectURL(wavBlob);
+					setWavUrl(objectUrl);
+					// #region agent log
+					_dbg('wav-url-created', {hypothesisId:'F',runId:'post-fix-2',wavBlobSize:wavBlob.size,wavBlobType:wavBlob.type});
+					// #endregion
 				}
 			} catch (err) {
 				console.error("[Calibration] Failed to decode clip:", err);
 				if (!isCancelled) {
 					setWaveformData([]);
+					setWavUrl(null);
 				}
 			} finally {
 				if (audioContext) {
@@ -121,8 +183,13 @@ export function CalibrationClipPlayer({
 
 		return () => {
 			isCancelled = true;
+			if (objectUrl) {
+				URL.revokeObjectURL(objectUrl);
+			}
 		};
 	}, [blob]);
+
+	const playbackSrc = wavUrl ?? audioUrl;
 
 	useEffect(() => {
 		const audio = audioRef.current;
@@ -130,6 +197,9 @@ export function CalibrationClipPlayer({
 
 		const handleLoadedMetadata = () => {
 			const nextDuration = Number.isFinite(audio.duration) ? audio.duration : 0;
+			// #region agent log
+			_dbg('handleLoadedMetadata', {hypothesisId:'F',runId:'post-fix-2',audioDuration:audio.duration,nextDuration,readyState:audio.readyState,seekableLength:audio.seekable?.length,seekableRanges:audio.seekable?.length ? Array.from({length:audio.seekable.length},(_,i)=>({start:audio.seekable.start(i),end:audio.seekable.end(i)})) : [],src:audio.src?.substring(0,40)});
+			// #endregion
 			setDuration(nextDuration);
 			if (pendingSeekRef.current !== null) {
 				const target = Math.min(
@@ -169,7 +239,7 @@ export function CalibrationClipPlayer({
 			audio.removeEventListener("pause", handlePause);
 			audio.removeEventListener("ended", handleEnded);
 		};
-	}, [audioUrl, decodedDuration]);
+	}, [playbackSrc, decodedDuration]);
 
 	useEffect(() => {
 		if (!isPlaying) return;
@@ -207,22 +277,24 @@ export function CalibrationClipPlayer({
 		}
 	};
 
+	const rawAudioElDuration = audioRef.current?.duration;
+	const finiteAudioElDuration =
+		rawAudioElDuration != null && Number.isFinite(rawAudioElDuration)
+			? rawAudioElDuration
+			: 0;
 	const effectiveDuration = Math.max(
 		duration,
 		decodedDuration,
-		audioRef.current?.duration || 0,
+		finiteAudioElDuration,
 	);
 
 	const handleSeek = (time: number) => {
 		const audio = audioRef.current;
+		// #region agent log
+		_dbg('handleSeek-entry', {hypothesisId:'F',runId:'post-fix-2',time,isFiniteTime:Number.isFinite(time),audioDuration:audio?.duration,readyState:audio?.readyState,effectiveDuration,seekableLength:audio?.seekable?.length});
+		// #endregion
 		if (!audio || !Number.isFinite(time)) return;
-		const availableDuration =
-			(audio.duration && Number.isFinite(audio.duration)
-				? audio.duration
-				: 0) ||
-			effectiveDuration ||
-			0;
-		const nextTime = Math.min(time, availableDuration);
+		const nextTime = Math.max(0, Math.min(time, effectiveDuration || 0));
 		if (audio.readyState < 1) {
 			pendingSeekRef.current = nextTime;
 			audio.load();
@@ -293,7 +365,7 @@ export function CalibrationClipPlayer({
 
 			<audio
 				ref={audioRef}
-				src={audioUrl}
+				src={playbackSrc}
 				preload="auto"
 				playsInline
 				className="sr-only"
