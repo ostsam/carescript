@@ -22,6 +22,14 @@ import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import {
+	Dialog,
+	DialogContent,
+	DialogDescription,
+	DialogFooter,
+	DialogHeader,
+	DialogTitle,
+} from "@/components/ui/dialog";
+import {
 	Combobox,
 	ComboboxInput,
 	ComboboxContent,
@@ -849,6 +857,21 @@ function CalibrationStep({
 	const canContinue = calibrationStatus === "ready";
 	const showSkip = !canContinue;
 	const isBusy = calibrationStatus === "loading" || calibrationStatus === "saving";
+	const hasClip = !!calibrationAudioUrl;
+	const [showOverwriteDialog, setShowOverwriteDialog] = useState(false);
+
+	const handleStartRecording = () => {
+		if (hasClip) {
+			setShowOverwriteDialog(true);
+			return;
+		}
+		onCalibrationStart();
+	};
+
+	const confirmOverwrite = () => {
+		setShowOverwriteDialog(false);
+		onCalibrationStart();
+	};
 
 	return (
 		<>
@@ -877,20 +900,20 @@ function CalibrationStep({
 					</div>
 
 					<div className="flex flex-wrap items-center gap-2">
-						{calibrationRecording ? (
-							<Button size="sm" variant="destructive" onClick={onCalibrationStop}>
-								Stop Recording
-							</Button>
-						) : (
-							<Button
-								size="sm"
-								variant="outline"
-								onClick={onCalibrationStart}
-								disabled={isBusy}
-							>
-								{canContinue ? "Re-record Calibration" : "Record Calibration"}
-							</Button>
-						)}
+					{calibrationRecording ? (
+						<Button size="sm" variant="destructive" onClick={onCalibrationStop}>
+							Stop Recording
+						</Button>
+					) : (
+						<Button
+							size="sm"
+							variant="outline"
+							onClick={handleStartRecording}
+							disabled={isBusy}
+						>
+							{canContinue ? "Re-record Calibration" : "Record Calibration"}
+						</Button>
+					)}
 
 						<span className="text-xs text-muted-foreground">
 							{calibrationStatus === "ready" && "Calibration ready"}
@@ -914,6 +937,32 @@ function CalibrationStep({
 					{calibrationError && (
 						<p className="text-xs text-destructive">{calibrationError}</p>
 					)}
+
+					<Dialog
+						open={showOverwriteDialog}
+						onOpenChange={setShowOverwriteDialog}
+					>
+						<DialogContent>
+							<DialogHeader>
+								<DialogTitle>Replace calibration clip?</DialogTitle>
+								<DialogDescription>
+									Recording a new clip will overwrite the existing calibration
+									audio. Continue?
+								</DialogDescription>
+							</DialogHeader>
+							<DialogFooter>
+								<Button
+									variant="outline"
+									onClick={() => setShowOverwriteDialog(false)}
+								>
+									Cancel
+								</Button>
+								<Button variant="destructive" onClick={confirmOverwrite}>
+									Record New Clip
+								</Button>
+							</DialogFooter>
+						</DialogContent>
+					</Dialog>
 				</CardContent>
 				<CardFooter className="flex items-center justify-end gap-2 border-t px-6 py-5">
 					{showSkip && (

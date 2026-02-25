@@ -9,6 +9,59 @@ export type CalibrationStatus =
 	| "saving"
 	| "error";
 
+const LOCAL_STORAGE_KEY = "carescript.calibration-clip.v1";
+
+const blobToDataUrl = (blob: Blob) =>
+	new Promise<string>((resolve, reject) => {
+		const reader = new FileReader();
+		reader.onloadend = () => resolve(reader.result as string);
+		reader.onerror = () => reject(reader.error);
+		reader.readAsDataURL(blob);
+	});
+
+const dataUrlToBlob = (dataUrl: string) => {
+	const [header, base64Data] = dataUrl.split(",");
+	const mimeMatch = header?.match(/data:(.*?);base64/);
+	const mimeType = mimeMatch?.[1] ?? "audio/webm";
+	const binary = atob(base64Data || "");
+	const bytes = new Uint8Array(binary.length);
+	for (let i = 0; i < binary.length; i += 1) {
+		bytes[i] = binary.charCodeAt(i);
+	}
+	return new Blob([bytes], { type: mimeType });
+};
+
+const loadLocalClip = () => {
+	if (typeof window === "undefined") return null;
+	const raw = window.localStorage.getItem(LOCAL_STORAGE_KEY);
+	if (!raw) return null;
+	try {
+		const parsed = JSON.parse(raw) as { dataUrl?: string };
+		if (!parsed.dataUrl) return null;
+		return {
+			dataUrl: parsed.dataUrl,
+			blob: dataUrlToBlob(parsed.dataUrl),
+		};
+	} catch {
+		return null;
+	}
+};
+
+const saveLocalClip = async (blob: Blob) => {
+	if (typeof window === "undefined") return;
+	try {
+		const dataUrl = await blobToDataUrl(blob);
+		window.localStorage.setItem(
+			LOCAL_STORAGE_KEY,
+			JSON.stringify({ dataUrl, updatedAt: Date.now() }),
+		);
+		return dataUrl;
+	} catch (err) {
+		console.warn("[Calibration] Failed to persist clip locally:", err);
+	}
+	return undefined;
+};
+
 type UseCalibrationClipState = {
 	status: CalibrationStatus;
 	recording: boolean;
@@ -26,18 +79,29 @@ export function useCalibrationClip(): UseCalibrationClipState {
 	const [error, setError] = useState<string | null>(null);
 	const [blob, setBlob] = useState<Blob | null>(null);
 	const [audioUrl, setAudioUrl] = useState<string | null>(null);
+	const [localDataUrl, setLocalDataUrl] = useState<string | null>(null);
 
 	const recorderRef = useRef<MediaRecorder | null>(null);
 	const chunksRef = useRef<Blob[]>([]);
 	const streamRef = useRef<MediaStream | null>(null);
 
 	const refresh = useCallback(async () => {
+		setError(null);
+		const cachedClip = loadLocalClip();
+		if (cachedClip) {
+			setBlob(cachedClip.blob);
+			setLocalDataUrl(cachedClip.dataUrl);
+			setStatus("ready");
+			return;
+		}
+		setStatus("loading");
 		try {
-			setStatus("loading");
 			const res = await fetch("/api/nurses/calibration");
 			if (res.status === 404) {
-				setBlob(null);
-				setStatus("missing");
+				if (!cachedClip) {
+					setBlob(null);
+					setStatus("missing");
+				}
 				return;
 			}
 			if (!res.ok) {
@@ -46,11 +110,19 @@ export function useCalibrationClip(): UseCalibrationClipState {
 			const buffer = await res.arrayBuffer();
 			const mimeType =
 				res.headers.get("Content-Type") || "application/octet-stream";
-			setBlob(new Blob([buffer], { type: mimeType }));
+			const fetchedBlob = new Blob([buffer], { type: mimeType });
+			setBlob(fetchedBlob);
+			void saveLocalClip(fetchedBlob).then((cachedUrl) => {
+				if (cachedUrl) {
+					setLocalDataUrl(cachedUrl);
+				}
+			});
 			setStatus("ready");
 		} catch (err) {
 			console.error("[Calibration] Failed to load clip:", err);
-			setStatus("error");
+			if (!cachedClip) {
+				setStatus("error");
+			}
 		}
 	}, []);
 
@@ -61,6 +133,11 @@ export function useCalibrationClip(): UseCalibrationClipState {
 	useEffect(() => {
 		if (!blob) {
 			setAudioUrl(null);
+			setLocalDataUrl(null);
+			return;
+		}
+		if (localDataUrl) {
+			setAudioUrl(localDataUrl);
 			return;
 		}
 		const url = URL.createObjectURL(blob);
@@ -68,7 +145,7 @@ export function useCalibrationClip(): UseCalibrationClipState {
 		return () => {
 			URL.revokeObjectURL(url);
 		};
-	}, [blob]);
+	}, [blob, localDataUrl]);
 
 	const startRecording = useCallback(() => {
 		if (recording) return;
@@ -98,8 +175,14 @@ export function useCalibrationClip(): UseCalibrationClipState {
 						type: recorder.mimeType || "audio/webm",
 					});
 					setRecording(false);
+					setBlob(recordedBlob);
 					setStatus("saving");
 					try {
+						void saveLocalClip(recordedBlob).then((cachedUrl) => {
+							if (cachedUrl) {
+								setLocalDataUrl(cachedUrl);
+							}
+						});
 						const formData = new FormData();
 						const file = new File([recordedBlob], "calibration.webm", {
 							type: recordedBlob.type || "audio/webm",
@@ -113,7 +196,6 @@ export function useCalibrationClip(): UseCalibrationClipState {
 							const body = await res.json().catch(() => ({}));
 							throw new Error(body.error || "Failed to save calibration clip");
 						}
-						setBlob(recordedBlob);
 						setStatus("ready");
 					} catch (err) {
 						console.error("[Calibration] Upload failed:", err);
