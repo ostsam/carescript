@@ -9,6 +9,18 @@ import { deleteVoice } from "@/lib/elevenlabs";
 
 const VALID_RELATIONS = ["Spouse", "Son", "Daughter", "Sibling", "Friend", "Other"] as const;
 
+function optionalText(value: FormDataEntryValue | null): string | null {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+function optionalDate(value: FormDataEntryValue | null): string | null {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
 type AddPatientResult =
   | { success: true; patientId: string }
   | { success: false; error: string };
@@ -22,6 +34,13 @@ export async function addPatient(formData: FormData): Promise<AddPatientResult> 
 
   const patientFirstName = formData.get("patientFirstName")?.toString().trim();
   const patientLastName = formData.get("patientLastName")?.toString().trim();
+  const dateOfBirth = optionalDate(formData.get("dateOfBirth"));
+  const sex = optionalText(formData.get("sex"));
+  const codeStatus = optionalText(formData.get("codeStatus"));
+  const admitDate = optionalDate(formData.get("admitDate"));
+  const roomLabel = optionalText(formData.get("roomLabel"));
+  const bedLabel = optionalText(formData.get("bedLabel"));
+  const primaryPayor = optionalText(formData.get("primaryPayor"));
   const lovedOneFirstName = formData.get("lovedOneFirstName")?.toString().trim();
   const lovedOneLastName = formData.get("lovedOneLastName")?.toString().trim();
   const lovedOneRelation = formData.get("lovedOneRelation")?.toString().trim();
@@ -54,6 +73,13 @@ export async function addPatient(formData: FormData): Promise<AddPatientResult> 
       orgId: nurse.orgId,
       patientFirstName,
       patientLastName,
+      dateOfBirth,
+      sex,
+      codeStatus,
+      admitDate,
+      roomLabel,
+      bedLabel,
+      primaryPayor,
       lovedOneFirstName,
       lovedOneLastName,
       lovedOneRelation,

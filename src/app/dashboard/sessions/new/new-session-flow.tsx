@@ -706,7 +706,7 @@ function SetupStep({
 							<p className="text-xs text-muted-foreground">
 								No patients found.{" "}
 								<Link
-									href="/dashboard/patients"
+									href="/dashboard/patients/new"
 									className="text-primary underline"
 								>
 									Add a patient first.

@@ -100,10 +100,6 @@ const audioBufferToWavBlob = (buffer: AudioBuffer): Blob => {
 	return new Blob([arrayBuffer], { type: "audio/wav" });
 };
 
-// #region agent log
-const _dbg = (msg: string, data: Record<string, unknown>) => fetch('http://127.0.0.1:7276/ingest/a9aae397-52ab-48ec-9c08-4a6fe0624065',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'b3c54d'},body:JSON.stringify({sessionId:'b3c54d',location:'calibration-clip-player.tsx',message:msg,data,timestamp:Date.now()})}).catch(()=>{});
-// #endregion
-
 export function CalibrationClipPlayer({
 	audioUrl,
 	blob,
@@ -159,9 +155,6 @@ export function CalibrationClipPlayer({
 					const wavBlob = audioBufferToWavBlob(audioBuffer);
 					objectUrl = URL.createObjectURL(wavBlob);
 					setWavUrl(objectUrl);
-					// #region agent log
-					_dbg('wav-url-created', {hypothesisId:'F',runId:'post-fix-2',wavBlobSize:wavBlob.size,wavBlobType:wavBlob.type});
-					// #endregion
 				}
 			} catch (err) {
 				console.error("[Calibration] Failed to decode clip:", err);
@@ -197,9 +190,6 @@ export function CalibrationClipPlayer({
 
 		const handleLoadedMetadata = () => {
 			const nextDuration = Number.isFinite(audio.duration) ? audio.duration : 0;
-			// #region agent log
-			_dbg('handleLoadedMetadata', {hypothesisId:'F',runId:'post-fix-2',audioDuration:audio.duration,nextDuration,readyState:audio.readyState,seekableLength:audio.seekable?.length,seekableRanges:audio.seekable?.length ? Array.from({length:audio.seekable.length},(_,i)=>({start:audio.seekable.start(i),end:audio.seekable.end(i)})) : [],src:audio.src?.substring(0,40)});
-			// #endregion
 			setDuration(nextDuration);
 			if (pendingSeekRef.current !== null) {
 				const target = Math.min(
@@ -290,9 +280,6 @@ export function CalibrationClipPlayer({
 
 	const handleSeek = (time: number) => {
 		const audio = audioRef.current;
-		// #region agent log
-		_dbg('handleSeek-entry', {hypothesisId:'F',runId:'post-fix-2',time,isFiniteTime:Number.isFinite(time),audioDuration:audio?.duration,readyState:audio?.readyState,effectiveDuration,seekableLength:audio?.seekable?.length});
-		// #endregion
 		if (!audio || !Number.isFinite(time)) return;
 		const nextTime = Math.max(0, Math.min(time, effectiveDuration || 0));
 		if (audio.readyState < 1) {

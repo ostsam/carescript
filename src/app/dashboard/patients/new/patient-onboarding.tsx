@@ -1,16 +1,16 @@
 "use client";
 
-import { useRef, useEffect, useState, useTransition, useCallback } from "react";
-import { addPatient, updatePatientVoice } from "./actions";
+import { useCallback, useEffect, useRef, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
+import { addPatient, updatePatientVoice } from "../actions";
 import {
-	Dialog,
-	DialogContent,
-	DialogDescription,
-	DialogFooter,
-	DialogHeader,
-	DialogTitle,
-	DialogTrigger,
-} from "@/components/ui/dialog";
+	Card,
+	CardContent,
+	CardDescription,
+	CardFooter,
+	CardHeader,
+	CardTitle,
+} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -30,6 +30,7 @@ import {
 	ArrowRight01Icon,
 	CheckmarkCircle01Icon,
 	Alert02Icon,
+	UserLoveIcon,
 } from "@hugeicons/core-free-icons";
 
 const RELATIONS = [
@@ -41,6 +42,8 @@ const RELATIONS = [
 	"Other",
 ] as const;
 
+const VOICE_SAMPLE_PASSAGE = `When the warm sun rose, I quietly packed a small bag, made fresh tea, and walked down the path to the garden. We watched quick birds dart over the blue pond, felt a cool breeze, and talked about music, family, and the week ahead. I paused to read a short note, hummed a tune, and said, "It will be a good day." Later, I counted the books on the shelf, smiled at a funny joke, and described the colors of the sky.`;
+
 type Step = "details" | "voice";
 
 interface PatientInfo {
@@ -51,30 +54,14 @@ interface PatientInfo {
 	lovedOneRelation: string;
 }
 
-export function AddPatientDialog({ children }: { children: React.ReactNode }) {
-	const [open, setOpen] = useState(false);
+export function PatientOnboarding() {
 	const [step, setStep] = useState<Step>("details");
 	const [patientId, setPatientId] = useState<string | null>(null);
 	const [patientInfo, setPatientInfo] = useState<PatientInfo | null>(null);
 	const [isPending, startTransition] = useTransition();
 	const [error, setError] = useState<string | null>(null);
+	const router = useRouter();
 	const formRef = useRef<HTMLFormElement>(null);
-
-	function resetState() {
-		setStep("details");
-		setPatientId(null);
-		setPatientInfo(null);
-		setError(null);
-		formRef.current?.reset();
-	}
-
-	useEffect(() => {
-		if (!open) {
-			setTimeout(() => {
-				resetState();
-			}, 0);
-		}
-	}, [open]);
 
 	function handleDetailsSubmit(formData: FormData) {
 		setError(null);
@@ -98,33 +85,35 @@ export function AddPatientDialog({ children }: { children: React.ReactNode }) {
 	}
 
 	function handleDone() {
-		setOpen(false);
+		if (patientId) {
+			router.push(`/dashboard/patients/${patientId}`);
+		} else {
+			router.push("/dashboard/patients");
+		}
+	}
+
+	function handleBack() {
+		setStep("details");
 	}
 
 	return (
-		<Dialog open={open} onOpenChange={setOpen}>
-			<DialogTrigger asChild>{children}</DialogTrigger>
-			<DialogContent
-				className="sm:max-w-lg"
-				showCloseButton={step === "details"}
-			>
-				{step === "details" ? (
-					<DetailsStep
-						formRef={formRef}
-						onSubmit={handleDetailsSubmit}
-						isPending={isPending}
-						error={error}
-					/>
-				) : (
-					<VoiceStep
-						patientId={patientId!}
-						patientInfo={patientInfo!}
-						onDone={handleDone}
-						onBack={() => {}}
-					/>
-				)}
-			</DialogContent>
-		</Dialog>
+		<div className="grid gap-6">
+			{step === "details" ? (
+				<DetailsStep
+					formRef={formRef}
+					onSubmit={handleDetailsSubmit}
+					isPending={isPending}
+					error={error}
+				/>
+			) : (
+				<VoiceStep
+					patientId={patientId!}
+					patientInfo={patientInfo!}
+					onDone={handleDone}
+					onBack={handleBack}
+				/>
+			)}
+		</div>
 	);
 }
 
@@ -140,140 +129,148 @@ function DetailsStep({
 	error: string | null;
 }) {
 	return (
-		<>
-			<DialogHeader>
+		<Card>
+			<CardHeader>
 				<div className="flex items-center gap-2">
-					<DialogTitle>Add Patient</DialogTitle>
+					<CardTitle>Patient Onboarding</CardTitle>
 					<Badge variant="secondary" className="text-[10px] font-normal">
 						Step 1 of 2
 					</Badge>
 				</div>
-				<DialogDescription>
-					Enter the patient and their loved one&apos;s details. You&apos;ll be
-					able to record a voice sample next.
-				</DialogDescription>
-			</DialogHeader>
+				<CardDescription>
+					Capture resident demographics and loved one details. You can add a
+					voice sample next.
+				</CardDescription>
+			</CardHeader>
+			<form ref={formRef} action={onSubmit}>
+				<CardContent className="grid gap-5">
+					<div className="grid gap-3">
+						<p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+							Patient
+						</p>
+						<div className="grid grid-cols-2 gap-3">
+							<div className="grid gap-1.5">
+								<Label htmlFor="patientFirstName">First name</Label>
+								<Input
+									id="patientFirstName"
+									name="patientFirstName"
+									placeholder="e.g. Margaret"
+									required
+									autoFocus
+								/>
+							</div>
+							<div className="grid gap-1.5">
+								<Label htmlFor="patientLastName">Last name</Label>
+								<Input
+									id="patientLastName"
+									name="patientLastName"
+									placeholder="e.g. Johnson"
+									required
+								/>
+							</div>
+						</div>
+						<div className="grid grid-cols-2 gap-3">
+							<div className="grid gap-1.5">
+								<Label htmlFor="dateOfBirth">Date of birth</Label>
+								<Input id="dateOfBirth" name="dateOfBirth" type="date" />
+							</div>
+							<div className="grid gap-1.5">
+								<Label htmlFor="sex">Sex</Label>
+								<Input id="sex" name="sex" placeholder="e.g. Female" />
+							</div>
+						</div>
+						<div className="grid grid-cols-2 gap-3">
+							<div className="grid gap-1.5">
+								<Label htmlFor="codeStatus">Code status</Label>
+								<Input
+									id="codeStatus"
+									name="codeStatus"
+									placeholder="e.g. DNR"
+								/>
+							</div>
+							<div className="grid gap-1.5">
+								<Label htmlFor="admitDate">Admit date</Label>
+								<Input id="admitDate" name="admitDate" type="date" />
+							</div>
+						</div>
+						<div className="grid grid-cols-3 gap-3">
+							<div className="grid gap-1.5">
+								<Label htmlFor="roomLabel">Room</Label>
+								<Input id="roomLabel" name="roomLabel" placeholder="e.g. 204" />
+							</div>
+							<div className="grid gap-1.5">
+								<Label htmlFor="bedLabel">Bed</Label>
+								<Input id="bedLabel" name="bedLabel" placeholder="e.g. B" />
+							</div>
+							<div className="grid gap-1.5">
+								<Label htmlFor="primaryPayor">Primary payor</Label>
+								<Input
+									id="primaryPayor"
+									name="primaryPayor"
+									placeholder="e.g. Medicare"
+								/>
+							</div>
+						</div>
+					</div>
 
-			<form ref={formRef} action={onSubmit} className="grid gap-5">
-				<div className="grid gap-3">
-					<p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-						Patient
-					</p>
-					<div className="grid grid-cols-2 gap-3">
-						<div className="grid gap-1.5">
-							<Label htmlFor="patientFirstName">First name</Label>
-							<Input
-								id="patientFirstName"
-								name="patientFirstName"
-								placeholder="e.g. Margaret"
-								required
-								autoFocus
-							/>
+					<div className="grid gap-3">
+						<p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+							Loved One
+						</p>
+						<div className="grid grid-cols-2 gap-3">
+							<div className="grid gap-1.5">
+								<Label htmlFor="lovedOneFirstName">First name</Label>
+								<Input
+									id="lovedOneFirstName"
+									name="lovedOneFirstName"
+									placeholder="e.g. Robert"
+									required
+								/>
+							</div>
+							<div className="grid gap-1.5">
+								<Label htmlFor="lovedOneLastName">Last name</Label>
+								<Input
+									id="lovedOneLastName"
+									name="lovedOneLastName"
+									placeholder="e.g. Johnson"
+									required
+								/>
+							</div>
 						</div>
 						<div className="grid gap-1.5">
-							<Label htmlFor="patientLastName">Last name</Label>
-							<Input
-								id="patientLastName"
-								name="patientLastName"
-								placeholder="e.g. Johnson"
-								required
-							/>
-						</div>
-					</div>
-					<div className="grid grid-cols-2 gap-3">
-						<div className="grid gap-1.5">
-							<Label htmlFor="dateOfBirth">Date of birth</Label>
-							<Input id="dateOfBirth" name="dateOfBirth" type="date" />
-						</div>
-						<div className="grid gap-1.5">
-							<Label htmlFor="sex">Sex</Label>
-							<Input id="sex" name="sex" placeholder="e.g. Female" />
-						</div>
-					</div>
-					<div className="grid grid-cols-2 gap-3">
-						<div className="grid gap-1.5">
-							<Label htmlFor="codeStatus">Code status</Label>
-							<Input id="codeStatus" name="codeStatus" placeholder="e.g. DNR" />
-						</div>
-						<div className="grid gap-1.5">
-							<Label htmlFor="admitDate">Admit date</Label>
-							<Input id="admitDate" name="admitDate" type="date" />
+							<Label htmlFor="lovedOneRelation">Relation to patient</Label>
+							<Select name="lovedOneRelation" required>
+								<SelectTrigger className="w-full">
+									<SelectValue placeholder="Select relation" />
+								</SelectTrigger>
+								<SelectContent>
+									{RELATIONS.map((r) => (
+										<SelectItem key={r} value={r}>
+											{r}
+										</SelectItem>
+									))}
+								</SelectContent>
+							</Select>
 						</div>
 					</div>
-					<div className="grid grid-cols-3 gap-3">
-						<div className="grid gap-1.5">
-							<Label htmlFor="roomLabel">Room</Label>
-							<Input id="roomLabel" name="roomLabel" placeholder="e.g. 204" />
-						</div>
-						<div className="grid gap-1.5">
-							<Label htmlFor="bedLabel">Bed</Label>
-							<Input id="bedLabel" name="bedLabel" placeholder="e.g. B" />
-						</div>
-						<div className="grid gap-1.5">
-							<Label htmlFor="primaryPayor">Primary payor</Label>
-							<Input id="primaryPayor" name="primaryPayor" placeholder="e.g. Medicare" />
-						</div>
-					</div>
-				</div>
 
-				<div className="grid gap-3">
-					<p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-						Loved One
-					</p>
-					<div className="grid grid-cols-2 gap-3">
-						<div className="grid gap-1.5">
-							<Label htmlFor="lovedOneFirstName">First name</Label>
-							<Input
-								id="lovedOneFirstName"
-								name="lovedOneFirstName"
-								placeholder="e.g. Robert"
-								required
-							/>
+					{error && (
+						<div className="flex items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
+							<HugeiconsIcon icon={Alert02Icon} size={16} />
+							{error}
 						</div>
-						<div className="grid gap-1.5">
-							<Label htmlFor="lovedOneLastName">Last name</Label>
-							<Input
-								id="lovedOneLastName"
-								name="lovedOneLastName"
-								placeholder="e.g. Johnson"
-								required
-							/>
-						</div>
-					</div>
-					<div className="grid gap-1.5">
-						<Label htmlFor="lovedOneRelation">Relation to patient</Label>
-						<Select name="lovedOneRelation" required>
-							<SelectTrigger className="w-full">
-								<SelectValue placeholder="Select relation" />
-							</SelectTrigger>
-							<SelectContent>
-								{RELATIONS.map((r) => (
-									<SelectItem key={r} value={r}>
-										{r}
-									</SelectItem>
-								))}
-							</SelectContent>
-						</Select>
-					</div>
-				</div>
-
-				{error && (
-					<div className="flex items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
-						<HugeiconsIcon icon={Alert02Icon} size={16} />
-						{error}
-					</div>
-				)}
-
-				<DialogFooter>
+					)}
+				</CardContent>
+				<CardFooter className="justify-end">
 					<Button type="submit" disabled={isPending}>
 						{isPending ? "Saving…" : "Next: Voice Sample"}
 						{!isPending && (
 							<HugeiconsIcon icon={ArrowRight01Icon} data-icon="inline-end" />
 						)}
 					</Button>
-				</DialogFooter>
+				</CardFooter>
 			</form>
-		</>
+		</Card>
 	);
 }
 
@@ -281,6 +278,7 @@ function VoiceStep({
 	patientId,
 	patientInfo,
 	onDone,
+	onBack,
 }: {
 	patientId: string;
 	patientInfo: PatientInfo;
@@ -401,8 +399,19 @@ function VoiceStep({
 
 	if (cloneSuccess) {
 		return (
-			<>
-				<div className="flex flex-col items-center py-8 text-center">
+			<Card>
+				<CardHeader>
+					<div className="flex items-center gap-2">
+						<CardTitle>Patient Added</CardTitle>
+						<Badge variant="secondary" className="text-[10px] font-normal">
+							Complete
+						</Badge>
+					</div>
+					<CardDescription>
+						The resident has been created and a voice clone is ready.
+					</CardDescription>
+				</CardHeader>
+				<CardContent className="flex flex-col items-center py-6 text-center">
 					<div className="flex size-14 items-center justify-center rounded-full bg-emerald-100 mb-4">
 						<HugeiconsIcon
 							icon={CheckmarkCircle01Icon}
@@ -410,40 +419,48 @@ function VoiceStep({
 							className="text-emerald-600"
 						/>
 					</div>
-					<h3 className="text-lg font-semibold">Patient Added</h3>
-					<p className="mt-1.5 max-w-xs text-sm text-muted-foreground">
+					<p className="text-sm text-muted-foreground">
 						<span className="font-medium text-foreground">
 							{patientInfo.patientFirstName} {patientInfo.patientLastName}
 						</span>{" "}
 						has been added with a cloned voice for{" "}
 						<span className="font-medium text-foreground">{lovedOneName}</span>.
 					</p>
-				</div>
-				<DialogFooter>
-					<Button onClick={onDone}>Done</Button>
-				</DialogFooter>
-			</>
+				</CardContent>
+				<CardFooter className="justify-end">
+					<Button onClick={onDone}>View patient profile</Button>
+				</CardFooter>
+			</Card>
 		);
 	}
 
 	return (
-		<>
-			<DialogHeader>
+		<Card>
+			<CardHeader>
 				<div className="flex items-center gap-2">
-					<DialogTitle>Voice Sample</DialogTitle>
+					<CardTitle>Voice Sample</CardTitle>
 					<Badge variant="secondary" className="text-[10px] font-normal">
 						Step 2 of 2
 					</Badge>
 				</div>
-				<DialogDescription>
+				<CardDescription>
 					Record a sample of{" "}
 					<span className="font-medium text-foreground">{lovedOneName}</span>
 					&apos;s voice. At least 30 seconds of clear speech works best. This
 					step is optional — you can add a voice later.
-				</DialogDescription>
-			</DialogHeader>
-
-			<div className="grid gap-4">
+				</CardDescription>
+			</CardHeader>
+			<CardContent className="grid gap-4">
+				<div className="flex items-center gap-2 text-xs text-muted-foreground">
+					<HugeiconsIcon icon={UserLoveIcon} size={14} />
+					Voice is tied to the loved one for calming interventions.
+				</div>
+				<div className="rounded-lg border bg-muted/30 p-3 text-sm text-muted-foreground">
+					<p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+						Please read this out loud at a calm, natural pace{" "}
+					</p>
+					<p className="mt-2 text-sm text-foreground">{VOICE_SAMPLE_PASSAGE}</p>
+				</div>
 				<div
 					className="rounded-xl border bg-muted/30 p-4"
 					style={{ minHeight: 112 }}
@@ -528,25 +545,34 @@ function VoiceStep({
 						{cloneError}
 					</div>
 				)}
-			</div>
-
-			<DialogFooter>
+			</CardContent>
+			<CardFooter className="justify-between">
 				<Button
 					type="button"
 					variant="ghost"
-					onClick={onDone}
+					onClick={onBack}
 					disabled={cloning}
 				>
-					Skip for now
+					Back
 				</Button>
-				<Button
-					type="button"
-					onClick={handleCloneVoice}
-					disabled={!audioBlob || cloning || recording}
-				>
-					{cloning ? "Cloning voice…" : "Clone Voice & Finish"}
-				</Button>
-			</DialogFooter>
-		</>
+				<div className="flex items-center gap-2">
+					<Button
+						type="button"
+						variant="ghost"
+						onClick={onDone}
+						disabled={cloning}
+					>
+						Skip for now
+					</Button>
+					<Button
+						type="button"
+						onClick={handleCloneVoice}
+						disabled={!audioBlob || cloning || recording}
+					>
+						{cloning ? "Cloning voice…" : "Clone Voice & Finish"}
+					</Button>
+				</div>
+			</CardFooter>
+		</Card>
 	);
 }

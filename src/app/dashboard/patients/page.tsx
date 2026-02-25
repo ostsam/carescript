@@ -17,7 +17,6 @@ import {
 } from "@/components/ui/table";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import Link from "next/link";
-import { AddPatientDialog } from "./add-patient-dialog";
 import {
 	SortableHead,
 	TablePagination,
@@ -157,12 +156,15 @@ export default async function PatientsPage({ searchParams }: PageProps) {
 						{totalCount}
 					</Badge>
 				</div>
-				<AddPatientDialog>
-					<Button className="rounded-full shadow-sm shadow-primary/25">
+				<Button
+					className="rounded-full shadow-sm shadow-primary/25"
+					asChild
+				>
+					<Link href="/dashboard/patients/new">
 						<HugeiconsIcon icon={PlusSignIcon} data-icon="inline-start" />
 						Add Patient
-					</Button>
-				</AddPatientDialog>
+					</Link>
+				</Button>
 			</div>
 
 			{/* Content */}
@@ -339,12 +341,15 @@ function EmptyState({ query }: { query: string }) {
 						Add your first patient to start recording sessions and generating
 						clinical notes.
 					</p>
-					<AddPatientDialog>
-						<Button className="mt-5 rounded-full shadow-sm shadow-primary/25">
+					<Button
+						className="mt-5 rounded-full shadow-sm shadow-primary/25"
+						asChild
+					>
+						<Link href="/dashboard/patients/new">
 							<HugeiconsIcon icon={PlusSignIcon} data-icon="inline-start" />
 							Add Your First Patient
-						</Button>
-					</AddPatientDialog>
+						</Link>
+					</Button>
 				</div>
 			</CardContent>
 		</Card>

@@ -5,8 +5,12 @@ import {
   transcripts,
   clinicalNotes,
   nurses,
+  patientDiagnoses,
+  patientAllergies,
+  patientMedications,
+  patientVitals,
 } from "@/lib/db/schema";
-import { eq, sql, desc } from "drizzle-orm";
+import { eq, desc } from "drizzle-orm";
 import { redirect, notFound } from "next/navigation";
 import Link from "next/link";
 import { HugeiconsIcon } from "@hugeicons/react";
@@ -27,6 +31,7 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   Table,
   TableBody,
@@ -37,6 +42,8 @@ import {
 } from "@/components/ui/table";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { VoiceCloneCard } from "./voice-clone-card";
+import { addDiagnosis, addAllergy, addMedication, addVital } from "./actions";
+import { ResidentOverview } from "./resident-overview";
 
 function relativeDate(date: Date): string {
   const now = new Date();
@@ -62,6 +69,48 @@ function formatDate(date: Date): string {
     day: "numeric",
     year: "numeric",
   });
+}
+
+function formatShortDate(value?: Date | string | null): string {
+  if (!value) return "—";
+  const date = typeof value === "string" ? new Date(value) : value;
+  if (Number.isNaN(date.getTime())) return "—";
+  return date.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
+function formatVitals(row: {
+  bpSystolic: number | null;
+  bpDiastolic: number | null;
+  heartRate: number | null;
+  respRate: number | null;
+  tempC: number | null;
+  spo2: number | null;
+  weightKg: number | null;
+}): string {
+  const parts: string[] = [];
+  if (row.bpSystolic !== null && row.bpDiastolic !== null) {
+    parts.push(`BP ${row.bpSystolic}/${row.bpDiastolic}`);
+  }
+  if (row.heartRate !== null) {
+    parts.push(`HR ${row.heartRate}`);
+  }
+  if (row.respRate !== null) {
+    parts.push(`RR ${row.respRate}`);
+  }
+  if (row.tempC !== null) {
+    parts.push(`Temp ${row.tempC.toFixed(1)}°C`);
+  }
+  if (row.spo2 !== null) {
+    parts.push(`SpO₂ ${row.spo2}%`);
+  }
+  if (row.weightKg !== null) {
+    parts.push(`Wt ${row.weightKg.toFixed(1)}kg`);
+  }
+  return parts.length > 0 ? parts.join(" · ") : "—";
 }
 
 interface Props {
@@ -119,6 +168,68 @@ export default async function PatientProfilePage({ params }: Props) {
       .innerJoin(transcripts, eq(clinicalNotes.transcriptId, transcripts.id))
       .where(eq(transcripts.patientId, id))
       .orderBy(desc(clinicalNotes.createdAt));
+  });
+
+  const diagnosisRows = await withAuth(session.user.id, async (tx) => {
+    return tx
+      .select({
+        id: patientDiagnoses.id,
+        description: patientDiagnoses.description,
+        icd10Code: patientDiagnoses.icd10Code,
+        isPrimary: patientDiagnoses.isPrimary,
+        createdAt: patientDiagnoses.createdAt,
+      })
+      .from(patientDiagnoses)
+      .where(eq(patientDiagnoses.patientId, id))
+      .orderBy(desc(patientDiagnoses.createdAt));
+  });
+
+  const allergyRows = await withAuth(session.user.id, async (tx) => {
+    return tx
+      .select({
+        id: patientAllergies.id,
+        substance: patientAllergies.substance,
+        reaction: patientAllergies.reaction,
+        severity: patientAllergies.severity,
+        recordedAt: patientAllergies.recordedAt,
+      })
+      .from(patientAllergies)
+      .where(eq(patientAllergies.patientId, id))
+      .orderBy(desc(patientAllergies.recordedAt));
+  });
+
+  const medicationRows = await withAuth(session.user.id, async (tx) => {
+    return tx
+      .select({
+        id: patientMedications.id,
+        name: patientMedications.name,
+        dose: patientMedications.dose,
+        route: patientMedications.route,
+        frequency: patientMedications.frequency,
+        createdAt: patientMedications.createdAt,
+      })
+      .from(patientMedications)
+      .where(eq(patientMedications.patientId, id))
+      .orderBy(desc(patientMedications.createdAt));
+  });
+
+  const vitalRows = await withAuth(session.user.id, async (tx) => {
+    return tx
+      .select({
+        id: patientVitals.id,
+        measuredAt: patientVitals.measuredAt,
+        bpSystolic: patientVitals.bpSystolic,
+        bpDiastolic: patientVitals.bpDiastolic,
+        heartRate: patientVitals.heartRate,
+        respRate: patientVitals.respRate,
+        tempC: patientVitals.tempC,
+        spo2: patientVitals.spo2,
+        weightKg: patientVitals.weightKg,
+      })
+      .from(patientVitals)
+      .where(eq(patientVitals.patientId, id))
+      .orderBy(desc(patientVitals.measuredAt))
+      .limit(5);
   });
 
   const initials =
@@ -183,6 +294,207 @@ export default async function PatientProfilePage({ params }: Props) {
                 New Session
               </Link>
             </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      <ResidentOverview
+        patient={{
+          id: patient.id,
+          dateOfBirth: patient.dateOfBirth,
+          sex: patient.sex,
+          codeStatus: patient.codeStatus,
+          admitDate: patient.admitDate,
+          roomLabel: patient.roomLabel,
+          bedLabel: patient.bedLabel,
+          primaryPayor: patient.primaryPayor,
+        }}
+      />
+
+      {/* Clinical snapshot */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Clinical Snapshot</CardTitle>
+          <CardDescription>
+            Active diagnoses, allergies, medications, and recent vitals.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-6 lg:grid-cols-2">
+          <div className="rounded-lg border p-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-semibold">Diagnoses</h3>
+              <Badge variant="secondary" className="text-[10px]">
+                {diagnosisRows.length}
+              </Badge>
+            </div>
+            {diagnosisRows.length > 0 ? (
+              <div className="mt-3 grid gap-2">
+                {diagnosisRows.map((row) => (
+                  <div
+                    key={row.id}
+                    className="flex items-start justify-between gap-3 rounded-md border border-border/60 px-3 py-2 text-sm"
+                  >
+                    <div>
+                      <div className="font-medium">{row.description}</div>
+                      {row.icd10Code && (
+                        <div className="text-xs text-muted-foreground">
+                          ICD-10 {row.icd10Code}
+                        </div>
+                      )}
+                    </div>
+                    {row.isPrimary && (
+                      <Badge variant="default" className="text-[10px]">
+                        Primary
+                      </Badge>
+                    )}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="mt-3 text-xs text-muted-foreground">
+                No diagnoses recorded yet.
+              </p>
+            )}
+            <form action={addDiagnosis} className="mt-4 grid gap-2">
+              <input type="hidden" name="patientId" value={patient.id} />
+              <div className="grid gap-2 sm:grid-cols-2">
+                <Input name="description" placeholder="Diagnosis" required />
+                <Input name="icd10Code" placeholder="ICD-10 (optional)" />
+              </div>
+              <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                <input type="checkbox" name="isPrimary" />
+                Primary diagnosis
+              </label>
+              <Button type="submit" size="sm" variant="secondary">
+                Add diagnosis
+              </Button>
+            </form>
+          </div>
+
+          <div className="rounded-lg border p-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-semibold">Allergies</h3>
+              <Badge variant="secondary" className="text-[10px]">
+                {allergyRows.length}
+              </Badge>
+            </div>
+            {allergyRows.length > 0 ? (
+              <div className="mt-3 grid gap-2">
+                {allergyRows.map((row) => (
+                  <div
+                    key={row.id}
+                    className="rounded-md border border-border/60 px-3 py-2 text-sm"
+                  >
+                    <div className="font-medium">{row.substance}</div>
+                    <div className="text-xs text-muted-foreground">
+                      {[row.reaction, row.severity].filter(Boolean).join(" · ") || "—"}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="mt-3 text-xs text-muted-foreground">
+                No allergies recorded yet.
+              </p>
+            )}
+            <form action={addAllergy} className="mt-4 grid gap-2">
+              <input type="hidden" name="patientId" value={patient.id} />
+              <div className="grid gap-2 sm:grid-cols-2">
+                <Input name="substance" placeholder="Substance" required />
+                <Input name="reaction" placeholder="Reaction (optional)" />
+              </div>
+              <Input name="severity" placeholder="Severity (optional)" />
+              <Button type="submit" size="sm" variant="secondary">
+                Add allergy
+              </Button>
+            </form>
+          </div>
+
+          <div className="rounded-lg border p-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-semibold">Medications</h3>
+              <Badge variant="secondary" className="text-[10px]">
+                {medicationRows.length}
+              </Badge>
+            </div>
+            {medicationRows.length > 0 ? (
+              <div className="mt-3 grid gap-2">
+                {medicationRows.map((row) => (
+                  <div
+                    key={row.id}
+                    className="rounded-md border border-border/60 px-3 py-2 text-sm"
+                  >
+                    <div className="font-medium">{row.name}</div>
+                    <div className="text-xs text-muted-foreground">
+                      {[row.dose, row.route, row.frequency].filter(Boolean).join(" · ") || "—"}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="mt-3 text-xs text-muted-foreground">
+                No medications recorded yet.
+              </p>
+            )}
+            <form action={addMedication} className="mt-4 grid gap-2">
+              <input type="hidden" name="patientId" value={patient.id} />
+              <Input name="name" placeholder="Medication name" required />
+              <div className="grid gap-2 sm:grid-cols-3">
+                <Input name="dose" placeholder="Dose" />
+                <Input name="route" placeholder="Route" />
+                <Input name="frequency" placeholder="Frequency" />
+              </div>
+              <Button type="submit" size="sm" variant="secondary">
+                Add medication
+              </Button>
+            </form>
+          </div>
+
+          <div className="rounded-lg border p-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-semibold">Vitals</h3>
+              <Badge variant="secondary" className="text-[10px]">
+                {vitalRows.length}
+              </Badge>
+            </div>
+            {vitalRows.length > 0 ? (
+              <div className="mt-3 grid gap-2 text-sm">
+                {vitalRows.map((row) => (
+                  <div
+                    key={row.id}
+                    className="rounded-md border border-border/60 px-3 py-2"
+                  >
+                    <div className="text-xs text-muted-foreground">
+                      {formatShortDate(row.measuredAt)}
+                    </div>
+                    <div className="font-medium">{formatVitals(row)}</div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="mt-3 text-xs text-muted-foreground">
+                No vitals recorded yet.
+              </p>
+            )}
+            <form action={addVital} className="mt-4 grid gap-2">
+              <input type="hidden" name="patientId" value={patient.id} />
+              <div className="grid gap-2 sm:grid-cols-2">
+                <Input name="bpSystolic" placeholder="BP systolic" type="number" min="0" />
+                <Input name="bpDiastolic" placeholder="BP diastolic" type="number" min="0" />
+              </div>
+              <div className="grid gap-2 sm:grid-cols-3">
+                <Input name="heartRate" placeholder="HR" type="number" min="0" />
+                <Input name="respRate" placeholder="RR" type="number" min="0" />
+                <Input name="spo2" placeholder="SpO₂" type="number" min="0" />
+              </div>
+              <div className="grid gap-2 sm:grid-cols-2">
+                <Input name="tempC" placeholder="Temp °C" type="number" step="0.1" />
+                <Input name="weightKg" placeholder="Weight kg" type="number" step="0.1" />
+              </div>
+              <Button type="submit" size="sm" variant="secondary">
+                Add vitals
+              </Button>
+            </form>
           </div>
         </CardContent>
       </Card>

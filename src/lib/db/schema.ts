@@ -5,7 +5,11 @@ import {
 	pgTable,
 	customType,
 	text,
+	date,
+	boolean,
 	timestamp,
+	integer,
+	real,
 	uuid,
 } from "drizzle-orm/pg-core";
 
@@ -52,6 +56,9 @@ export const nurses = pgTable(
 		userId: uuid("user_id").notNull().unique(),
 		nurseFirstName: text("nurse_first_name").notNull(),
 		nurseLastName: text("nurse_last_name").notNull(),
+		calibrationAudioBlob: bytea("calibration_audio_blob"),
+		calibrationAudioMimeType: text("calibration_audio_mime_type"),
+		calibrationAudioStorageUrl: text("calibration_audio_storage_url"),
 		orgId: uuid("org_id")
 			.notNull()
 			.references(() => organizations.id, { onDelete: "cascade" }),
@@ -76,6 +83,13 @@ export const patients = pgTable(
 			.references(() => organizations.id, { onDelete: "cascade" }),
 		patientFirstName: text("patient_first_name").notNull(),
 		patientLastName: text("patient_last_name").notNull(),
+		dateOfBirth: date("date_of_birth"),
+		sex: text("sex"),
+		codeStatus: text("code_status"),
+		admitDate: date("admit_date"),
+		roomLabel: text("room_label"),
+		bedLabel: text("bed_label"),
+		primaryPayor: text("primary_payor"),
 		lovedOneFirstName: text("loved_one_first_name").notNull(),
 		lovedOneLastName: text("loved_one_last_name").notNull(),
 		lovedOneRelation: text("loved_one_relation").notNull(),
@@ -88,6 +102,101 @@ export const patients = pgTable(
 		pgPolicy("patients_org_isolation", {
 			for: "all",
 			using: sql`org_id = auth.current_org_id()`,
+		}),
+	],
+).enableRLS();
+
+export const patientDiagnoses = pgTable(
+	"patient_diagnoses",
+	{
+		id: uuid("id").primaryKey().defaultRandom(),
+		patientId: uuid("patient_id")
+			.notNull()
+			.references(() => patients.id, { onDelete: "cascade" }),
+		description: text("description").notNull(),
+		icd10Code: text("icd10_code"),
+		isPrimary: boolean("is_primary").notNull().default(false),
+		createdAt: timestamp("created_at", { withTimezone: true })
+			.notNull()
+			.defaultNow(),
+	},
+	() => [
+		pgPolicy("patient_diagnoses_org_isolation", {
+			for: "all",
+			using: sql`patient_id IN (SELECT id FROM public.patients WHERE org_id = auth.current_org_id())`,
+		}),
+	],
+).enableRLS();
+
+export const patientAllergies = pgTable(
+	"patient_allergies",
+	{
+		id: uuid("id").primaryKey().defaultRandom(),
+		patientId: uuid("patient_id")
+			.notNull()
+			.references(() => patients.id, { onDelete: "cascade" }),
+		substance: text("substance").notNull(),
+		reaction: text("reaction"),
+		severity: text("severity"),
+		recordedAt: timestamp("recorded_at", { withTimezone: true })
+			.notNull()
+			.defaultNow(),
+	},
+	() => [
+		pgPolicy("patient_allergies_org_isolation", {
+			for: "all",
+			using: sql`patient_id IN (SELECT id FROM public.patients WHERE org_id = auth.current_org_id())`,
+		}),
+	],
+).enableRLS();
+
+export const patientMedications = pgTable(
+	"patient_medications",
+	{
+		id: uuid("id").primaryKey().defaultRandom(),
+		patientId: uuid("patient_id")
+			.notNull()
+			.references(() => patients.id, { onDelete: "cascade" }),
+		name: text("name").notNull(),
+		dose: text("dose"),
+		route: text("route"),
+		frequency: text("frequency"),
+		startAt: timestamp("start_at", { withTimezone: true }),
+		endAt: timestamp("end_at", { withTimezone: true }),
+		createdAt: timestamp("created_at", { withTimezone: true })
+			.notNull()
+			.defaultNow(),
+	},
+	() => [
+		pgPolicy("patient_medications_org_isolation", {
+			for: "all",
+			using: sql`patient_id IN (SELECT id FROM public.patients WHERE org_id = auth.current_org_id())`,
+		}),
+	],
+).enableRLS();
+
+export const patientVitals = pgTable(
+	"patient_vitals",
+	{
+		id: uuid("id").primaryKey().defaultRandom(),
+		patientId: uuid("patient_id")
+			.notNull()
+			.references(() => patients.id, { onDelete: "cascade" }),
+		measuredAt: timestamp("measured_at", { withTimezone: true })
+			.notNull()
+			.defaultNow(),
+		bpSystolic: integer("bp_systolic"),
+		bpDiastolic: integer("bp_diastolic"),
+		heartRate: integer("heart_rate"),
+		respRate: integer("resp_rate"),
+		tempC: real("temp_c"),
+		spo2: integer("spo2"),
+		weightKg: real("weight_kg"),
+	},
+	() => [
+		pgPolicy("patient_vitals_org_isolation", {
+			for: "all",
+			using: sql`patient_id IN (SELECT id FROM public.patients WHERE org_id = auth.current_org_id())`,
 		}),
 	],
 ).enableRLS();

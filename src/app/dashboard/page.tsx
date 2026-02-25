@@ -147,7 +147,7 @@ export default async function DashboardPage() {
         </div>
         <div className="flex gap-2 pt-2 sm:pt-0">
           <Button variant="outline" size="default" className="rounded-full" asChild>
-            <Link href="/dashboard/patients">
+            <Link href="/dashboard/patients/new">
               <HugeiconsIcon icon={PatientIcon} data-icon="inline-start" />
               Add Patient
             </Link>
@@ -213,7 +213,7 @@ export default async function DashboardPage() {
         <QuickActionCard
           title="Add a Patient"
           description="Onboard a new patient with demographics and loved one details."
-          href="/dashboard/patients"
+          href="/dashboard/patients/new"
           label="Add"
         />
       </div>
