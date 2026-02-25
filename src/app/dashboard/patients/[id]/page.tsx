@@ -32,7 +32,6 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import {
   Table,
   TableBody,
@@ -43,13 +42,8 @@ import {
 } from "@/components/ui/table";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { VoiceCloneCard } from "./voice-clone-card";
-import {
-  updatePatientProfile,
-  addDiagnosis,
-  addAllergy,
-  addMedication,
-  addVital,
-} from "./actions";
+import { addDiagnosis, addAllergy, addMedication, addVital } from "./actions";
+import { ResidentOverview } from "./resident-overview";
 
 function relativeDate(date: Date): string {
   const now = new Date();
@@ -86,17 +80,6 @@ function formatShortDate(value?: Date | string | null): string {
     day: "numeric",
     year: "numeric",
   });
-}
-
-function formatDateInput(value?: Date | string | null): string {
-  if (!value) return "";
-  if (typeof value === "string") return value;
-  return value.toISOString().slice(0, 10);
-}
-
-function formatValue(value?: string | null): string {
-  if (!value) return "—";
-  return value;
 }
 
 function formatVitals(row: {
@@ -315,135 +298,18 @@ export default async function PatientProfilePage({ params }: Props) {
         </CardContent>
       </Card>
 
-      {/* Resident overview */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Resident Overview</CardTitle>
-          <CardDescription>
-            Key demographics, stay details, and billing context.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="grid gap-6 md:grid-cols-[1.2fr_1fr]">
-          <div className="grid gap-4 text-sm">
-            <div className="grid gap-2">
-              <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                Demographics
-              </p>
-              <div className="flex items-center justify-between gap-4">
-                <span className="text-muted-foreground">DOB</span>
-                <span className="font-medium">{formatShortDate(patient.dateOfBirth)}</span>
-              </div>
-              <div className="flex items-center justify-between gap-4">
-                <span className="text-muted-foreground">Sex</span>
-                <span className="font-medium">{formatValue(patient.sex)}</span>
-              </div>
-              <div className="flex items-center justify-between gap-4">
-                <span className="text-muted-foreground">Code status</span>
-                <span className="font-medium">{formatValue(patient.codeStatus)}</span>
-              </div>
-            </div>
-            <div className="grid gap-2">
-              <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                Stay
-              </p>
-              <div className="flex items-center justify-between gap-4">
-                <span className="text-muted-foreground">Admit date</span>
-                <span className="font-medium">{formatShortDate(patient.admitDate)}</span>
-              </div>
-              <div className="flex items-center justify-between gap-4">
-                <span className="text-muted-foreground">Room / Bed</span>
-                <span className="font-medium">
-                  {patient.roomLabel || patient.bedLabel
-                    ? `${patient.roomLabel ?? "—"} / ${patient.bedLabel ?? "—"}`
-                    : "—"}
-                </span>
-              </div>
-              <div className="flex items-center justify-between gap-4">
-                <span className="text-muted-foreground">Primary payor</span>
-                <span className="font-medium">{formatValue(patient.primaryPayor)}</span>
-              </div>
-            </div>
-          </div>
-          <form
-            action={updatePatientProfile.bind(null, patient.id)}
-            className="grid gap-4 rounded-lg border bg-muted/20 p-4"
-          >
-            <div>
-              <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                Quick Edit
-              </p>
-              <p className="text-xs text-muted-foreground">
-                Update key resident details without leaving the page.
-              </p>
-            </div>
-            <div className="grid gap-3">
-              <div className="grid grid-cols-2 gap-3">
-                <div className="grid gap-1.5">
-                  <Label htmlFor="dateOfBirth">DOB</Label>
-                  <Input
-                    id="dateOfBirth"
-                    name="dateOfBirth"
-                    type="date"
-                    defaultValue={formatDateInput(patient.dateOfBirth)}
-                  />
-                </div>
-                <div className="grid gap-1.5">
-                  <Label htmlFor="sex">Sex</Label>
-                  <Input id="sex" name="sex" defaultValue={patient.sex ?? ""} />
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="grid gap-1.5">
-                  <Label htmlFor="codeStatus">Code status</Label>
-                  <Input
-                    id="codeStatus"
-                    name="codeStatus"
-                    defaultValue={patient.codeStatus ?? ""}
-                  />
-                </div>
-                <div className="grid gap-1.5">
-                  <Label htmlFor="admitDate">Admit date</Label>
-                  <Input
-                    id="admitDate"
-                    name="admitDate"
-                    type="date"
-                    defaultValue={formatDateInput(patient.admitDate)}
-                  />
-                </div>
-              </div>
-              <div className="grid grid-cols-3 gap-3">
-                <div className="grid gap-1.5">
-                  <Label htmlFor="roomLabel">Room</Label>
-                  <Input
-                    id="roomLabel"
-                    name="roomLabel"
-                    defaultValue={patient.roomLabel ?? ""}
-                  />
-                </div>
-                <div className="grid gap-1.5">
-                  <Label htmlFor="bedLabel">Bed</Label>
-                  <Input
-                    id="bedLabel"
-                    name="bedLabel"
-                    defaultValue={patient.bedLabel ?? ""}
-                  />
-                </div>
-                <div className="grid gap-1.5">
-                  <Label htmlFor="primaryPayor">Primary payor</Label>
-                  <Input
-                    id="primaryPayor"
-                    name="primaryPayor"
-                    defaultValue={patient.primaryPayor ?? ""}
-                  />
-                </div>
-              </div>
-            </div>
-            <Button type="submit" size="sm" className="w-full">
-              Save overview
-            </Button>
-          </form>
-        </CardContent>
-      </Card>
+      <ResidentOverview
+        patient={{
+          id: patient.id,
+          dateOfBirth: patient.dateOfBirth,
+          sex: patient.sex,
+          codeStatus: patient.codeStatus,
+          admitDate: patient.admitDate,
+          roomLabel: patient.roomLabel,
+          bedLabel: patient.bedLabel,
+          primaryPayor: patient.primaryPayor,
+        }}
+      />
 
       {/* Clinical snapshot */}
       <Card>

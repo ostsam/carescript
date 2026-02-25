@@ -18,12 +18,6 @@ function optionalText(value: FormDataEntryValue | null): string | null {
   return trimmed.length > 0 ? trimmed : null;
 }
 
-function optionalDate(value: FormDataEntryValue | null): string | null {
-  if (typeof value !== "string") return null;
-  const trimmed = value.trim();
-  return trimmed.length > 0 ? trimmed : null;
-}
-
 function optionalInt(value: FormDataEntryValue | null): number | null {
   if (typeof value !== "string") return null;
   const trimmed = value.trim();
@@ -45,33 +39,47 @@ function revalidatePatient(patientId: string) {
   revalidatePath(`/dashboard/patients/${patientId}`);
 }
 
-export async function updatePatientProfile(patientId: string, formData: FormData) {
+const PATIENT_EDIT_FIELDS = [
+  "dateOfBirth",
+  "sex",
+  "codeStatus",
+  "admitDate",
+  "roomLabel",
+  "bedLabel",
+  "primaryPayor",
+] as const;
+
+type PatientEditField = (typeof PATIENT_EDIT_FIELDS)[number];
+
+function isPatientEditField(value: string): value is PatientEditField {
+  return (PATIENT_EDIT_FIELDS as readonly string[]).includes(value);
+}
+
+export async function updatePatientField(
+  patientId: string,
+  field: PatientEditField,
+  value: string | null,
+) {
   const { data: session } = await auth.getSession();
 
   if (!session?.user || !patientId) {
     return;
   }
 
-  const dateOfBirth = optionalDate(formData.get("dateOfBirth"));
-  const sex = optionalText(formData.get("sex"));
-  const codeStatus = optionalText(formData.get("codeStatus"));
-  const admitDate = optionalDate(formData.get("admitDate"));
-  const roomLabel = optionalText(formData.get("roomLabel"));
-  const bedLabel = optionalText(formData.get("bedLabel"));
-  const primaryPayor = optionalText(formData.get("primaryPayor"));
+  if (!isPatientEditField(field)) {
+    return;
+  }
+
+  const normalizedValue =
+    typeof value === "string" && value.trim().length > 0 ? value.trim() : null;
+
+  const updatePayload: Partial<typeof patients.$inferInsert> = {};
+  (updatePayload as Record<string, string | null>)[field] = normalizedValue;
 
   await withAuth(session.user.id, async (tx) => {
     await tx
       .update(patients)
-      .set({
-        dateOfBirth,
-        sex,
-        codeStatus,
-        admitDate,
-        roomLabel,
-        bedLabel,
-        primaryPayor,
-      })
+      .set(updatePayload)
       .where(eq(patients.id, patientId));
   });
 
