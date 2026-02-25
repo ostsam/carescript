@@ -3,10 +3,17 @@ import {
 	pgEnum,
 	pgPolicy,
 	pgTable,
+	customType,
 	text,
 	timestamp,
 	uuid,
 } from "drizzle-orm/pg-core";
+
+const bytea = customType<{ data: Buffer | null; driverData: Buffer | null }>({
+	dataType() {
+		return "bytea";
+	},
+});
 
 export const interactionTypeEnum = pgEnum("interaction_type", [
 	"Routine",
@@ -97,6 +104,9 @@ export const transcripts = pgTable(
 			.references(() => nurses.id, { onDelete: "cascade" }),
 		interactionType: interactionTypeEnum("interaction_type").notNull(),
 		rawTranscript: text("raw_transcript").notNull(),
+		audioBlob: bytea("audio_blob"),
+		audioMimeType: text("audio_mime_type"),
+		audioStorageUrl: text("audio_storage_url"),
 		timestamp: timestamp("timestamp", { withTimezone: true })
 			.notNull()
 			.defaultNow(),
