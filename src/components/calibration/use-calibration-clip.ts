@@ -97,7 +97,7 @@ export function useCalibrationClip(): UseCalibrationClipState {
 		setStatus("loading");
 		try {
 			const res = await fetch("/api/nurses/calibration");
-			if (res.status === 404) {
+			if (res.status === 204) {
 				if (!cachedClip) {
 					setBlob(null);
 					setStatus("missing");
@@ -220,7 +220,7 @@ export function useCalibrationClip(): UseCalibrationClipState {
 				);
 				setStatus("error");
 			}
-		})().catch(() => {});
+		})().catch(() => { });
 	}, [recording]);
 
 	const stopRecording = useCallback(() => {

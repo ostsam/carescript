@@ -316,10 +316,18 @@ export function NewSessionFlow({ patients, defaultPatientId }: Props) {
 			chunksRef.current = [];
 			pendingChunksRef.current = [];
 
+			// 1. Proactive Session Check
 			const tokenRes = await fetch("/api/deepgram/token", { method: "POST" });
-			if (!tokenRes.ok) {
-				throw new Error("Failed to authorize realtime transcription");
+
+			if (tokenRes.status === 401) {
+				throw new Error("Your session has expired. Please refresh the page and log in again.");
 			}
+
+			if (!tokenRes.ok) {
+				const errorBody = await tokenRes.json().catch(() => ({}));
+				throw new Error(errorBody.error || "Failed to authorize realtime transcription (Deepgram)");
+			}
+
 			const tokenBody = await tokenRes.json();
 			const dgClient = createClient(tokenBody.token);
 			const connection = dgClient.listen.live({
@@ -391,8 +399,14 @@ export function NewSessionFlow({ patients, defaultPatientId }: Props) {
 				if (liveStatusRef.current !== "recording") {
 					return;
 				}
-				console.error("[Deepgram] Live transcription error:", err);
-				setError("Realtime transcription failed. Please try again.");
+				console.error("[Deepgram] Live transcription error object:", err);
+
+				// Inspect the error object for more detail
+				let message = "Realtime transcription failed.";
+				if (err?.message) message += ` ${err.message}`;
+				if (err?.code) message += ` (Code: ${err.code})`;
+
+				setError(`${message} Please check your connection and try again.`);
 			});
 
 			recorder.ondataavailable = (e) => {

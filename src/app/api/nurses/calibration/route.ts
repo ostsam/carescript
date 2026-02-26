@@ -31,7 +31,7 @@ export async function GET() {
 
 	const row = await fetchCalibrationRow(session.user.id);
 	if (!row?.calibration_audio_blob) {
-		return new NextResponse(null, { status: 404 });
+		return new NextResponse(null, { status: 204 });
 	}
 
 	const mimeType = row.calibration_audio_mime_type || "application/octet-stream";
