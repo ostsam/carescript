@@ -33,25 +33,28 @@ export async function POST(request: Request) {
     console.log(`[ElevenLabs] Generating signed URL for nurse: ${session.user.id}, patient: ${patientFirstName}`);
 
     try {
-        // Generate a signed URL — expires in 15 minutes, never exposes the API key to the client
-        const response = await (elevenlabs as any).conversationalAi.agents.getSignedUrl({
+        // Correct path for the current SDK version (2.36.0+)
+        // Overrides will be handled on the client-side for better reliability
+        const response = await elevenlabs.conversationalAi.conversations.getSignedUrl({
             agentId: AGENT_ID,
         });
 
-        const signedUrl: string = response.signedUrl ?? response.signed_url;
+        // The SDK returns ConversationSignedUrlResponseModel which has signedUrl
+        const signedUrl = (response as any).signedUrl || (response as any).signed_url;
 
         if (!signedUrl) {
-            throw new Error("ElevenLabs did not return a signed URL");
+            console.error("[ElevenLabs] Invalid response data - missing signedUrl:", response);
+            throw new Error("No signed URL in response");
         }
 
         console.log(`[ElevenLabs] Signed URL successfully generated for intervention`);
 
         return NextResponse.json({ signedUrl });
-    } catch (err) {
-        console.error("[ElevenLabs] Failed to generate signed URL:", err);
+    } catch (error: any) {
+        console.error("[ElevenLabs] Failed to generate signed URL:", error);
         return NextResponse.json(
-            { error: "Failed to initialize intervention agent" },
-            { status: 500 },
+            { error: error.message || "Failed to generate token" },
+            { status: 500 }
         );
     }
 }

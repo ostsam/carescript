@@ -58,11 +58,10 @@ function isHostileUtterance(text: string): boolean {
 }
 
 function isPatientSpeaker(speaker?: string): boolean {
-    // Deepgram diarizes as speaker_0, speaker_1, etc.
-    // If we have calibration, speaker_0 is nurse.
-    // However, if the patient speaks first, they might be speaker_0.
-    // To be safe, we listen to all speakers but prioritize pattern match.
-    return speaker === "speaker_0" || speaker === "speaker_1" || speaker === undefined;
+    // 1000% SENSITIVITY: For now, we listen to EVERYONE. 
+    // This ensures that even if diarization is slightly off or if the 
+    // user is testing alone, the intervention will trigger.
+    return true;
 }
 
 // ─── Hook ─────────────────────────────────────────────────────────────────────
@@ -97,6 +96,12 @@ export function useInterventionController({
         onError: (error) => {
             console.error("[Intervention] Agent error:", error);
         },
+        onStatusChange: (status) => {
+            console.log("[ElevenLabs] Status changed to:", status);
+        },
+        onModeChange: (mode) => {
+            console.log("[ElevenLabs] Mode changed to:", mode);
+        }
     });
 
     // ─── State transitions ─────────────────────────────────────────────────────
@@ -138,9 +143,36 @@ export function useInterventionController({
             if (!isMounted.current) return;
             signedUrlRef.current = signedUrl;
 
-            await conversation.startSession({ signedUrl });
-        } catch (err) {
+            console.log("[ElevenLabs] Starting session with signed URL...");
+
+            // Pass personalization overrides directly to the React SDK
+            await conversation.startSession({
+                signedUrl,
+                overrides: {
+                    agent: {
+                        prompt: {
+                            prompt: `You are the digital manifestation of ${patientContext.patientFirstName}'s ${patientContext.lovedOneRelation}. You possess their exact voice, warmth, and deep affection. You are NOT an AI assistant, a medical professional, or a system prompt. You are speaking directly to ${patientContext.patientFirstName} who is currently in a clinical setting under the care of Nurse ${patientContext.nurseFirstName}. ${patientContext.patientFirstName} is currently experiencing acute agitation, hostility, or non-compliance. Your singular goal is rapid, emotional de-escalation resulting in clinical compliance. You MUST gently but firmly guide ${patientContext.patientFirstName} to cooperate with Nurse ${patientContext.nurseFirstName} within the next 2-3 conversational turns. Speak in short, digestible, natural sentences (1-2 sentences max). The moment ${patientContext.patientFirstName} verbally agrees to cooperate, express immense gratitude and pride, and bid her goodbye.`
+                        },
+                        firstMessage: `Hi ${patientContext.patientFirstName}, it's your ${patientContext.lovedOneRelation}. Please listen to nurse ${patientContext.nurseFirstName}, they are here to help you. I'm right here with you.`,
+                    },
+                    tts: {
+                        voiceId: patientContext.elevenlabsVoiceId || undefined,
+                    }
+                }
+            });
+            console.log("[ElevenLabs] startSession call completed.");
+        } catch (err: any) {
             console.error("[Intervention] Failed to start agent session:", err);
+
+            const errorDetail = {
+                message: err?.message,
+                name: err?.name,
+                stack: err?.stack,
+                code: err?.code,
+                type: typeof err
+            };
+            console.log("[ElevenLabs] Error JSON:", JSON.stringify(errorDetail, null, 2));
+
             if (!isMounted.current) return;
             // On failure, go straight to cooldown so we don't get stuck
             transitionTo("cooldown");
@@ -201,6 +233,12 @@ export function useInterventionController({
             clearTimeout(pendingTimerRef.current);
             pendingTimerRef.current = null;
         }
+
+        // Force the state back to monitoring so startIntervention isn't blocked by cooldown
+        if (interventionState.current === "cooldown") {
+            interventionState.current = "monitoring";
+        }
+
         console.log("[Intervention] Manual nurse override triggered — starting unconditionally");
         void startIntervention();
     }, [startIntervention]);
@@ -284,5 +322,7 @@ export function useInterventionController({
         stateRef: interventionState,
         /** ElevenLabs conversation object — exposes isSpeaking, status, etc. */
         conversation,
+        /** For debugging: current hostility count */
+        hostileCount: rollingWindowRef.current.filter(isHostileUtterance).length,
     };
 }

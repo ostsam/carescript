@@ -274,7 +274,7 @@ export function NewSessionFlow({ patients, defaultPatientId }: Props) {
 		};
 	}, [selectedPatient]);
 
-	const { processSegment, endIntervention, triggerIntervention, conversation } = useInterventionController({
+	const { processSegment, endIntervention, triggerIntervention, conversation, hostileCount } = useInterventionController({
 		patientContext,
 		onStateChange: setInterventionState,
 	});
@@ -329,23 +329,22 @@ export function NewSessionFlow({ patients, defaultPatientId }: Props) {
 			}
 
 			const tokenBody = await tokenRes.json();
+
+			console.log("[Deepgram] Initializing live connection with model: nova-2");
 			const dgClient = createClient(tokenBody.token);
 			const connection = dgClient.listen.live({
 				model: "nova-2",
 				language: "en",
-				diarize: true,
-				punctuate: true,
 				smart_format: true,
 				interim_results: true,
-				vad_events: true,
-				utterance_end_ms: 1000,
+				keepAlive: true,
 			});
 
 			deepgramConnectionRef.current = connection;
 			deepgramReadyRef.current = false;
 
 			connection.on(LiveTranscriptionEvents.Open, () => {
-				console.log("[Deepgram] Connection established");
+				console.log("[Deepgram] Connection established successfully");
 				deepgramReadyRef.current = true;
 				if (pendingChunksRef.current.length > 0) {
 					pendingChunksRef.current.forEach((chunk) => connection.send(chunk));
@@ -353,8 +352,8 @@ export function NewSessionFlow({ patients, defaultPatientId }: Props) {
 				}
 			});
 
-			connection.on(LiveTranscriptionEvents.Close, () => {
-				console.log("[Deepgram] Connection closed");
+			connection.on(LiveTranscriptionEvents.Close, (event) => {
+				console.log("[Deepgram] Connection closed:", event);
 				deepgramReadyRef.current = false;
 				deepgramConnectionRef.current = null;
 				if (liveStatusRef.current !== "recording") {
@@ -378,12 +377,7 @@ export function NewSessionFlow({ patients, defaultPatientId }: Props) {
 					setLiveTranscript("");
 
 					// Feed final segments into the intervention classifier
-					const words = alternative?.words;
-					const speakerNum = words?.[0]?.speaker;
-					const speakerLabel = speakerNum !== undefined
-						? `speaker_${speakerNum}`
-						: undefined;
-					processSegment({ text, speaker: speakerLabel, timestamp: Date.now() });
+					processSegment({ text, speaker: "speaker_0", timestamp: Date.now() });
 				} else {
 					// Interim result
 					setLiveTranscript(text);
@@ -399,14 +393,20 @@ export function NewSessionFlow({ patients, defaultPatientId }: Props) {
 				if (liveStatusRef.current !== "recording") {
 					return;
 				}
-				console.error("[Deepgram] Live transcription error object:", err);
 
-				// Inspect the error object for more detail
-				let message = "Realtime transcription failed.";
-				if (err?.message) message += ` ${err.message}`;
-				if (err?.code) message += ` (Code: ${err.code})`;
+				console.error("[Deepgram] Live transcription error caught:", err);
 
-				setError(`${message} Please check your connection and try again.`);
+				// Inspect error fields manually
+				const errorInfo = {
+					name: (err as any)?.name,
+					message: (err as any)?.message,
+					code: (err as any)?.code,
+					type: typeof err,
+					isErrorInstance: err instanceof Error
+				};
+				console.log("[Deepgram] Error JSON:", JSON.stringify(errorInfo, null, 2));
+
+				setError(`Realtime transcription failed. Check console for details.`);
 			});
 
 			recorder.ondataavailable = (e) => {
@@ -653,11 +653,14 @@ export function NewSessionFlow({ patients, defaultPatientId }: Props) {
 					elapsed={elapsed}
 					formatTime={formatTime}
 					onStop={stopRecording}
-					transcript={transcript || liveTranscript}
+					transcript={transcript}
+					liveTranscript={liveTranscript}
 					interventionState={interventionState}
-					onEndIntervention={() => void endIntervention("nurse_override")}
+					onEndIntervention={() => endIntervention("nurse_override")}
 					onTriggerIntervention={triggerIntervention}
 					agentSpeaking={conversation.isSpeaking}
+					conversation={conversation}
+					hostileCount={hostileCount}
 				/>
 			)}
 
@@ -1029,10 +1032,13 @@ function RecordingStep({
 	formatTime,
 	onStop,
 	transcript,
+	liveTranscript,
 	interventionState,
 	onEndIntervention,
 	onTriggerIntervention,
 	agentSpeaking,
+	conversation,
+	hostileCount,
 }: {
 	patient: PatientOption;
 	mode: string;
@@ -1040,10 +1046,13 @@ function RecordingStep({
 	formatTime: (s: number) => string;
 	onStop: () => void;
 	transcript: string;
+	liveTranscript: string;
 	interventionState?: InterventionState;
 	onEndIntervention?: () => void;
 	onTriggerIntervention?: () => void;
 	agentSpeaking?: boolean;
+	conversation: any;
+	hostileCount: number;
 }) {
 	return (
 		<>
@@ -1159,17 +1168,55 @@ function RecordingStep({
 							Stop Recording
 						</Button>
 
-						{/* Manual nurse-initiated intervention trigger */}
-						{(interventionState === "monitoring") && (
-							<Button
-								size="sm"
-								variant="outline"
-								className="rounded-full border-orange-400 text-orange-700 hover:bg-orange-50 dark:border-orange-600 dark:text-orange-400"
-								onClick={onTriggerIntervention}
-							>
-								Trigger Intervention
-							</Button>
-						)}
+						{/* Clinical Telemetry & Debug Controls */}
+						<div className="mt-8 grid w-full max-w-lg grid-cols-2 gap-4 rounded-xl border border-dashed border-muted p-4">
+							<div className="flex flex-col gap-1">
+								<p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+									Live Hostility Score
+								</p>
+								<p className="text-xl font-bold font-mono">
+									{hostileCount} / 1
+								</p>
+								<div className="h-1 w-full rounded-full bg-muted overflow-hidden">
+									<div
+										className="h-full bg-orange-500 transition-all"
+										style={{ width: `${Math.min(100, (hostileCount / 1) * 100)}%` }}
+									/>
+								</div>
+							</div>
+
+							<div className="flex flex-col gap-1">
+								<p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+									AI Engine Status
+								</p>
+								<p className="text-sm font-medium capitalize">
+									{conversation.status}
+								</p>
+								{conversation.isSpeaking && (
+									<p className="text-[10px] text-green-500 animate-pulse font-bold">● AGENT IS SPEAKING</p>
+								)}
+							</div>
+
+							<div className="col-span-2">
+								<p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-1">
+									Classifier "Last Heard"
+								</p>
+								<div className="rounded bg-muted/50 p-2 text-xs font-mono text-muted-foreground break-words">
+									{liveTranscript || "Listening for triggers..."}
+								</div>
+							</div>
+
+							<div className="col-span-2 flex gap-2 pt-2">
+								<Button
+									size="sm"
+									variant="outline"
+									className="h-8 flex-1 rounded-lg border-orange-400 text-orange-700 hover:bg-orange-50 text-[10px]"
+									onClick={onTriggerIntervention}
+								>
+									Force Voice Intervene
+								</Button>
+							</div>
+						</div>
 					</div>
 				</CardContent>
 			</Card>
