@@ -77,6 +77,7 @@ export function useInterventionController({
     const cooldownTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const rollingWindowRef = useRef<string[]>([]);
     const signedUrlRef = useRef<string | null>(null);
+    const isMounted = useRef<boolean>(true);
 
     // ElevenLabs Conversational AI hook
     const conversation = useConversation({
@@ -112,7 +113,7 @@ export function useInterventionController({
 
     const startIntervention = useCallback(async () => {
         if (!patientContext) return;
-        if (interventionState.current !== "trigger_pending") return;
+        if (interventionState.current !== "trigger_pending" && interventionState.current !== "monitoring") return;
 
         transitionTo("active");
         onInterventionStart?.();
@@ -132,11 +133,14 @@ export function useInterventionController({
 
             if (!res.ok) throw new Error("Failed to get conversation token");
             const { signedUrl } = await res.json();
+
+            if (!isMounted.current) return;
             signedUrlRef.current = signedUrl;
 
             await conversation.startSession({ signedUrl });
         } catch (err) {
             console.error("[Intervention] Failed to start agent session:", err);
+            if (!isMounted.current) return;
             // On failure, go straight to cooldown so we don't get stuck
             transitionTo("cooldown");
             scheduleCooldownEnd();
@@ -153,8 +157,14 @@ export function useInterventionController({
             console.log("[Intervention] Ending —", reason);
 
             if (conversation.status === "connected") {
-                await conversation.endSession();
+                try {
+                    await conversation.endSession();
+                } catch (err) {
+                    console.error("[Intervention] Error during endSession:", err);
+                }
             }
+
+            if (!isMounted.current) return;
 
             onInterventionEnd?.();
             transitionTo("cooldown");
@@ -183,6 +193,15 @@ export function useInterventionController({
             void startIntervention();
         }, TRIGGER_DELAY_MS);
     }, [transitionTo, startIntervention]);
+
+    const manualImmediateTrigger = useCallback(() => {
+        if (pendingTimerRef.current) {
+            clearTimeout(pendingTimerRef.current);
+            pendingTimerRef.current = null;
+        }
+        console.log("[Intervention] Manual nurse override triggered — starting unconditionally");
+        void startIntervention();
+    }, [startIntervention]);
 
     const cancelPendingTrigger = useCallback(() => {
         if (pendingTimerRef.current) {
@@ -243,7 +262,9 @@ export function useInterventionController({
     // ─── Cleanup ───────────────────────────────────────────────────────────────
 
     useEffect(() => {
+        isMounted.current = true;
         return () => {
+            isMounted.current = false;
             if (pendingTimerRef.current) clearTimeout(pendingTimerRef.current);
             if (cooldownTimerRef.current) clearTimeout(cooldownTimerRef.current);
         };
@@ -255,7 +276,7 @@ export function useInterventionController({
         /** Nurse kill-switch — immediately ends any active or pending intervention */
         endIntervention,
         /** Nurse manual override — immediately starts intervention from monitoring state */
-        triggerIntervention: scheduleTrigger,
+        triggerIntervention: manualImmediateTrigger,
         /** Current state of the state machine (as a ref for use inside event handlers) */
         stateRef: interventionState,
         /** ElevenLabs conversation object — exposes isSpeaking, status, etc. */

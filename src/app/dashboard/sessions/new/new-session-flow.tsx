@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { HugeiconsIcon } from "@hugeicons/react";
@@ -264,14 +264,15 @@ export function NewSessionFlow({ patients, defaultPatientId }: Props) {
 	const selectedPatient = patients.find((p) => p.id === selectedPatientId);
 
 	// ── Intervention controller (after selectedPatient is declared) ───────────
-	const patientContext = selectedPatient
-		? {
+	const patientContext = useMemo(() => {
+		if (!selectedPatient) return null;
+		return {
 			patientFirstName: selectedPatient.firstName,
 			nurseFirstName: "Nurse", // TODO: pull from auth session when available
 			lovedOneRelation: selectedPatient.lovedOneRelation,
 			elevenlabsVoiceId: selectedPatient.elevenlabsVoiceId ?? null,
-		}
-		: null;
+		};
+	}, [selectedPatient]);
 
 	const { processSegment, endIntervention, triggerIntervention, conversation } = useInterventionController({
 		patientContext,
