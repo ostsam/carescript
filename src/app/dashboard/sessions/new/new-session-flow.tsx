@@ -268,7 +268,7 @@ export function NewSessionFlow({ patients, defaultPatientId }: Props) {
 		? {
 			patientFirstName: selectedPatient.firstName,
 			nurseFirstName: "Nurse", // TODO: pull from auth session when available
-			lovedOneRelation: selectedPatient.lovedOneRelation ?? "loved one",
+			lovedOneRelation: selectedPatient.lovedOneRelation,
 			elevenlabsVoiceId: selectedPatient.elevenlabsVoiceId ?? null,
 		}
 		: null;

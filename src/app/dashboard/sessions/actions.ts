@@ -11,7 +11,7 @@ export type PatientOption = {
   firstName: string;
   lastName: string;
   hasVoice: boolean;
-  lovedOneRelation: string | null;
+  lovedOneRelation: string;
   elevenlabsVoiceId: string | null;
 };
 
@@ -38,7 +38,7 @@ export async function getPatientList(): Promise<PatientOption[]> {
     firstName: r.firstName,
     lastName: r.lastName,
     hasVoice: r.hasVoice,
-    lovedOneRelation: r.lovedOneRelation ?? null,
+    lovedOneRelation: r.lovedOneRelation,
     elevenlabsVoiceId: r.elevenlabsVoiceId ?? null,
   }));
 }
