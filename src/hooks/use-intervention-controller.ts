@@ -79,6 +79,9 @@ export function useInterventionController({
     const signedUrlRef = useRef<string | null>(null);
     const isMounted = useRef<boolean>(true);
 
+    const startInterventionRef = useRef<() => Promise<void>>(async () => { });
+    const endInterventionRef = useRef<(reason?: "nurse_override" | "patient_complied" | "error") => Promise<void>>(async () => { });
+
     // ElevenLabs Conversational AI hook
     const conversation = useConversation({
         onConnect: () => {
@@ -118,13 +121,22 @@ export function useInterventionController({
     // ─── Start / End intervention ──────────────────────────────────────────────
 
     const startIntervention = useCallback(async () => {
-        if (!patientContext) return;
-        if (interventionState.current !== "trigger_pending" && interventionState.current !== "monitoring") return;
+        console.log("[Intervention] startIntervention CALLED. patientContext:", !!patientContext, "state:", interventionState.current);
+        if (!patientContext) {
+            console.log("[Intervention] ABORT: No patientContext");
+            return;
+        }
+        if (interventionState.current !== "trigger_pending" && interventionState.current !== "monitoring") {
+            console.log("[Intervention] ABORT: Invalid state:", interventionState.current);
+            return;
+        }
 
+        console.log("[Intervention] Validation passed, transitioning to active...");
         transitionTo("active");
         onInterventionStart?.();
 
         try {
+            console.log("[Intervention] Fetching signed URL...");
             // Fetch a signed URL from the server so we never expose the API key client-side
             const res = await fetch("/api/elevenlabs/conversation-token", {
                 method: "POST",
@@ -137,10 +149,16 @@ export function useInterventionController({
                 }),
             });
 
-            if (!res.ok) throw new Error("Failed to get conversation token");
+            if (!res.ok) {
+                const errorData = await res.text();
+                throw new Error("Failed to get conversation token: " + errorData);
+            }
             const { signedUrl } = await res.json();
 
-            if (!isMounted.current) return;
+            if (!isMounted.current) {
+                console.log("[Intervention] ABORT: Component unmounted during fetch.");
+                return;
+            }
             signedUrlRef.current = signedUrl;
 
             console.log("[ElevenLabs] Starting session with signed URL...");
@@ -206,6 +224,12 @@ export function useInterventionController({
         [conversation, transitionTo, onInterventionEnd],
     );
 
+    // Sync refs
+    useEffect(() => {
+        startInterventionRef.current = startIntervention;
+        endInterventionRef.current = endIntervention;
+    }, [startIntervention, endIntervention]);
+
     // ─── Cooldown management ───────────────────────────────────────────────────
 
     const scheduleCooldownEnd = useCallback(() => {
@@ -224,9 +248,9 @@ export function useInterventionController({
         pendingTimerRef.current = setTimeout(() => {
             pendingTimerRef.current = null;
             console.log("[Intervention] 3s Delay up - Starting ElevenLabs Session...");
-            void startIntervention();
+            void startInterventionRef.current();
         }, TRIGGER_DELAY_MS);
-    }, [transitionTo, startIntervention]);
+    }, [transitionTo]);
 
     const manualImmediateTrigger = useCallback(() => {
         if (pendingTimerRef.current) {
@@ -240,8 +264,8 @@ export function useInterventionController({
         }
 
         console.log("[Intervention] Manual nurse override triggered — starting unconditionally");
-        void startIntervention();
-    }, [startIntervention]);
+        void startInterventionRef.current();
+    }, []);
 
     const cancelPendingTrigger = useCallback(() => {
         if (pendingTimerRef.current) {
