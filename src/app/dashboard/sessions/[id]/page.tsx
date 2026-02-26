@@ -29,6 +29,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Separator } from "@/components/ui/separator";
+import { NotePoller } from "./note-poller";
 
 function relativeDate(date: Date): string {
   const now = new Date();
@@ -214,9 +215,8 @@ export default async function SessionDetailPage({ params }: Props) {
           </div>
           <CardDescription>
             {note
-              ? `Generated ${relativeDate(note.createdAt)} · ${
-                  note.status === "Approved_by_Nurse" ? "Approved" : "Draft"
-                }`
+              ? `Generated ${relativeDate(note.createdAt)} · ${note.status === "Approved_by_Nurse" ? "Approved" : "Draft"
+              }`
               : "Note generation pending"}
           </CardDescription>
         </CardHeader>
@@ -244,6 +244,7 @@ export default async function SessionDetailPage({ params }: Props) {
                 The clinical note will be auto-generated once the AI pipeline is
                 active. The raw transcript is saved above.
               </p>
+              <NotePoller />
             </div>
           )}
         </CardContent>

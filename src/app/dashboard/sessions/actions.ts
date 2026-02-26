@@ -70,10 +70,12 @@ export async function saveSession(
       .from(nurses)
       .where(eq(nurses.userId, session.user.id))
       .limit(1);
+
     return rows[0] ?? null;
   });
 
   if (!nurse) {
+    console.error(`[SaveSession] Failed: Could not determine nurse record for userId: ${session.user.id}`);
     return { success: false, error: "Could not determine your nurse record" };
   }
 

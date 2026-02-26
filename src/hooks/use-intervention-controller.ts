@@ -36,7 +36,7 @@ export interface InterventionControllerOptions {
 const ROLLING_WINDOW_SIZE = 5; // number of patient utterances to evaluate
 const TRIGGER_DELAY_MS = 10_000; // 10-second wait before activating
 const COOLDOWN_MS = 105_000; // ~1m45s cooldown after intervention ends
-const HOSTILITY_THRESHOLD = 2; // min hostile turns needed to trigger
+const HOSTILITY_THRESHOLD = 1; // min hostile turns needed to trigger
 
 // Patterns that signal hostility or strong unwillingness (patient utterances only)
 const HOSTILITY_PATTERNS = [
@@ -59,9 +59,10 @@ function isHostileUtterance(text: string): boolean {
 
 function isPatientSpeaker(speaker?: string): boolean {
     // Deepgram diarizes as speaker_0, speaker_1, etc.
-    // When calibration is used, speaker_0 = nurse, speaker_1 = patient.
-    // Without calibration, we cannot be certain — evaluate all speakers for robustness.
-    return speaker === "speaker_1" || speaker === undefined;
+    // If we have calibration, speaker_0 is nurse.
+    // However, if the patient speaks first, they might be speaker_0.
+    // To be safe, we listen to all speakers but prioritize pattern match.
+    return speaker === "speaker_0" || speaker === "speaker_1" || speaker === undefined;
 }
 
 // ─── Hook ─────────────────────────────────────────────────────────────────────
