@@ -97,7 +97,7 @@ export async function POST(
         // Parse the four SOAP sections from the response
         const extract = (label: string): string | null => {
             const regex = new RegExp(
-                `${label}:\\s*([\\s\\S]*?)(?=\\n(?:SUBJECTIVE|OBJECTIVE|ASSESSMENT|PLAN):|$)`,
+                `(?:\\*\\*)?${label}:(?:\\*\\*)?\\s*([\\s\\S]*?)(?=\\n(?:\\*\\*)?(?:SUBJECTIVE|OBJECTIVE|ASSESSMENT|PLAN):(?:\\*\\*)?|$)`,
                 "i"
             );
             return regex.exec(raw)?.[1]?.trim() ?? null;
