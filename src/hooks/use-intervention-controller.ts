@@ -76,8 +76,8 @@ export function useInterventionController({
     const pendingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const cooldownTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const rollingWindowRef = useRef<string[]>([]);
-    const signedUrlRef = useRef<string | null>(null);
     const isMounted = useRef<boolean>(true);
+    const voiceOverrideAllowedRef = useRef<boolean | null>(null);
 
     const startInterventionRef = useRef<() => Promise<void>>(async () => { });
     const endInterventionRef = useRef<(reason?: "nurse_override" | "patient_complied" | "error") => Promise<void>>(async () => { });
@@ -136,48 +136,99 @@ export function useInterventionController({
         onInterventionStart?.();
 
         try {
-            console.log("[Intervention] Fetching signed URL...");
-            // Fetch a signed URL from the server so we never expose the API key client-side
-            const res = await fetch("/api/elevenlabs/conversation-token", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    patientFirstName: patientContext.patientFirstName,
-                    nurseFirstName: patientContext.nurseFirstName,
-                    lovedOneRelation: patientContext.lovedOneRelation,
-                    voiceId: patientContext.elevenlabsVoiceId,
-                }),
-            });
-
-            if (!res.ok) {
-                const errorData = await res.text();
-                throw new Error("Failed to get conversation token: " + errorData);
-            }
-            const { signedUrl } = await res.json();
-
-            if (!isMounted.current) {
-                console.log("[Intervention] ABORT: Component unmounted during fetch.");
-                return;
-            }
-            signedUrlRef.current = signedUrl;
-
-            console.log("[ElevenLabs] Starting session with signed URL...");
-
-            // Pass personalization overrides directly to the React SDK
-            await conversation.startSession({
-                signedUrl,
-                overrides: {
+            const buildOverrides = (includeVoiceOverride: boolean) => {
+                const overrides = {
                     agent: {
                         prompt: {
                             prompt: `You are the digital manifestation of ${patientContext.patientFirstName}'s ${patientContext.lovedOneRelation}. You possess their exact voice, warmth, and deep affection. You are NOT an AI assistant, a medical professional, or a system prompt. You are speaking directly to ${patientContext.patientFirstName} who is currently in a clinical setting under the care of Nurse ${patientContext.nurseFirstName}. ${patientContext.patientFirstName} is currently experiencing acute agitation, hostility, or non-compliance. Your singular goal is rapid, emotional de-escalation resulting in clinical compliance. You MUST gently but firmly guide ${patientContext.patientFirstName} to cooperate with Nurse ${patientContext.nurseFirstName} within the next 2-3 conversational turns. Speak in short, digestible, natural sentences (1-2 sentences max). The moment ${patientContext.patientFirstName} verbally agrees to cooperate, express immense gratitude and pride, and bid her goodbye.`
                         },
                         firstMessage: `Hi ${patientContext.patientFirstName}, it's your ${patientContext.lovedOneRelation}. Please listen to nurse ${patientContext.nurseFirstName}, they are here to help you. I'm right here with you.`,
                     },
-                    tts: {
-                        voiceId: patientContext.elevenlabsVoiceId || undefined,
-                    }
+                    ...(includeVoiceOverride && patientContext.elevenlabsVoiceId
+                        ? {
+                            tts: {
+                                voiceId: patientContext.elevenlabsVoiceId,
+                            },
+                        }
+                        : {}),
+                } as const;
+
+                return overrides;
+            };
+
+            const startWithConnection = async (
+                connectionType: "webrtc" | "websocket",
+                includeVoiceOverride: boolean,
+            ) => {
+                console.log(`[Intervention] Fetching ${connectionType} auth...`);
+                const res = await fetch("/api/elevenlabs/conversation-token", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        patientFirstName: patientContext.patientFirstName,
+                        nurseFirstName: patientContext.nurseFirstName,
+                        lovedOneRelation: patientContext.lovedOneRelation,
+                        voiceId: patientContext.elevenlabsVoiceId,
+                        connectionType,
+                    }),
+                });
+
+                if (!res.ok) {
+                    const errorData = await res.text();
+                    throw new Error(`Failed to get ${connectionType} auth: ${errorData}`);
                 }
-            });
+
+                const payload = await res.json();
+                if (!isMounted.current) {
+                    console.log("[Intervention] ABORT: Component unmounted during fetch.");
+                    return;
+                }
+
+                console.log(`[ElevenLabs] Starting session (${connectionType})...`);
+
+                const overrides = buildOverrides(includeVoiceOverride);
+
+                if (connectionType === "webrtc") {
+                    const token = payload?.token;
+                    if (!token || typeof token !== "string") {
+                        throw new Error("Missing WebRTC token");
+                    }
+                    await conversation.startSession({
+                        conversationToken: token,
+                        connectionType: "webrtc",
+                        overrides,
+                    });
+                } else {
+                    const signedUrl = payload?.signedUrl;
+                    if (!signedUrl || typeof signedUrl !== "string") {
+                        throw new Error("Missing signed URL");
+                    }
+                    await conversation.startSession({
+                        signedUrl,
+                        connectionType: "websocket",
+                        overrides,
+                    });
+                }
+            };
+
+            // Prefer WebSocket for now; WebRTC is returning 404s on livekit.
+            try {
+                const allowVoiceOverride = voiceOverrideAllowedRef.current !== false;
+                await startWithConnection("websocket", allowVoiceOverride);
+            } catch (err: any) {
+                const message = err?.message ?? "";
+                const isVoiceOverrideError =
+                    /voice_id/i.test(message) && /not allowed|override/i.test(message);
+
+                if (isVoiceOverrideError && voiceOverrideAllowedRef.current !== false) {
+                    voiceOverrideAllowedRef.current = false;
+                    console.warn("[ElevenLabs] Voice override rejected by agent config. Retrying without voice override.");
+                    await startWithConnection("websocket", false);
+                } else {
+                    throw err;
+                }
+            }
+
             console.log("[ElevenLabs] startSession call completed.");
         } catch (err: any) {
             console.error("[Intervention] Failed to start agent session:", err);

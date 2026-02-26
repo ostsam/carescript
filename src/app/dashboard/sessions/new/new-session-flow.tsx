@@ -186,7 +186,10 @@ function buildTranscriptFromSegments(
 	if (segments.length === 0) return "";
 	const hasSpeakers = segments.some((s) => s.speaker);
 	if (!hasSpeakers) {
-		return segments.map((s) => s.text).join(" ").trim();
+		return segments
+			.map((s) => s.text)
+			.join(" ")
+			.trim();
 	}
 
 	const lines: string[] = [];
@@ -196,7 +199,9 @@ function buildTranscriptFromSegments(
 	segments.forEach((segment) => {
 		const speaker = segment.speaker || currentSpeaker;
 		if (speaker !== currentSpeaker && currentWords.length > 0) {
-			lines.push(`${formatSpeakerLabel(currentSpeaker)}: ${currentWords.join(" ")}`);
+			lines.push(
+				`${formatSpeakerLabel(currentSpeaker)}: ${currentWords.join(" ")}`,
+			);
 			currentWords = [];
 			currentSpeaker = speaker;
 		}
@@ -204,7 +209,9 @@ function buildTranscriptFromSegments(
 	});
 
 	if (currentWords.length > 0) {
-		lines.push(`${formatSpeakerLabel(currentSpeaker)}: ${currentWords.join(" ")}`);
+		lines.push(
+			`${formatSpeakerLabel(currentSpeaker)}: ${currentWords.join(" ")}`,
+		);
 	}
 
 	return lines.join("\n");
@@ -237,7 +244,38 @@ export function NewSessionFlow({ patients, defaultPatientId }: Props) {
 	const [liveTranscript, setLiveTranscript] = useState("");
 	const [error, setError] = useState<string | null>(null);
 	const [saving, setSaving] = useState(false);
-	const [interventionState, setInterventionState] = useState<InterventionState>("monitoring");
+	const [interventionState, setInterventionState] =
+		useState<InterventionState>("monitoring");
+	const audioUnlockRef = useRef(false);
+
+	const unlockAudio = useCallback(async () => {
+		if (audioUnlockRef.current) return;
+		audioUnlockRef.current = true;
+
+		if (typeof window === "undefined") return;
+		const AudioContextCtor =
+			window.AudioContext ||
+			(window as typeof window & { webkitAudioContext?: typeof AudioContext })
+				.webkitAudioContext;
+		if (!AudioContextCtor) return;
+
+		try {
+			const ctx = new AudioContextCtor();
+			const oscillator = ctx.createOscillator();
+			const gain = ctx.createGain();
+			gain.gain.value = 0;
+			oscillator.connect(gain);
+			gain.connect(ctx.destination);
+			oscillator.start();
+			oscillator.stop(ctx.currentTime + 0.01);
+			await ctx.resume();
+			setTimeout(() => {
+				void ctx.close();
+			}, 100);
+		} catch (err) {
+			console.warn("[Audio] Failed to unlock audio context:", err);
+		}
+	}, []);
 
 	const {
 		status: calibrationStatus,
@@ -274,10 +312,20 @@ export function NewSessionFlow({ patients, defaultPatientId }: Props) {
 		};
 	}, [selectedPatient]);
 
-	const { processSegment, endIntervention, triggerIntervention, conversation, hostileCount } = useInterventionController({
+	const {
+		processSegment,
+		endIntervention,
+		triggerIntervention,
+		conversation,
+		hostileCount,
+	} = useInterventionController({
 		patientContext,
 		onStateChange: setInterventionState,
 	});
+	const triggerInterventionWithAudio = useCallback(() => {
+		void unlockAudio();
+		triggerIntervention();
+	}, [triggerIntervention, unlockAudio]);
 
 	const startDisabled =
 		!selectedPatientId ||
@@ -299,6 +347,7 @@ export function NewSessionFlow({ patients, defaultPatientId }: Props) {
 
 	const startRecording = useCallback(async () => {
 		try {
+			await unlockAudio();
 			setError(null);
 			setTranscript("");
 			setLiveTranscript("");
@@ -320,12 +369,17 @@ export function NewSessionFlow({ patients, defaultPatientId }: Props) {
 			const tokenRes = await fetch("/api/deepgram/token", { method: "POST" });
 
 			if (tokenRes.status === 401) {
-				throw new Error("Your session has expired. Please refresh the page and log in again.");
+				throw new Error(
+					"Your session has expired. Please refresh the page and log in again.",
+				);
 			}
 
 			if (!tokenRes.ok) {
 				const errorBody = await tokenRes.json().catch(() => ({}));
-				throw new Error(errorBody.error || "Failed to authorize realtime transcription (Deepgram)");
+				throw new Error(
+					errorBody.error ||
+						"Failed to authorize realtime transcription (Deepgram)",
+				);
 			}
 
 			const tokenBody = await tokenRes.json();
@@ -333,7 +387,7 @@ export function NewSessionFlow({ patients, defaultPatientId }: Props) {
 			console.log("[Deepgram] Initializing live connection with model: nova-2");
 			const dgClient = createClient(tokenBody.token);
 			const connection = dgClient.listen.live({
-				model: "nova-2",
+				model: "nova-3-medical",
 				language: "en",
 				smart_format: true,
 				interim_results: true,
@@ -362,7 +416,9 @@ export function NewSessionFlow({ patients, defaultPatientId }: Props) {
 			});
 
 			connection.on(LiveTranscriptionEvents.Transcript, (data) => {
-				const alternatives = data.channel?.alternatives || data.results?.channels?.[0]?.alternatives;
+				const alternatives =
+					data.channel?.alternatives ||
+					data.results?.channels?.[0]?.alternatives;
 				const alternative = alternatives?.[0];
 				const text = alternative?.transcript?.trim();
 
@@ -402,9 +458,12 @@ export function NewSessionFlow({ patients, defaultPatientId }: Props) {
 					message: (err as any)?.message,
 					code: (err as any)?.code,
 					type: typeof err,
-					isErrorInstance: err instanceof Error
+					isErrorInstance: err instanceof Error,
 				};
-				console.log("[Deepgram] Error JSON:", JSON.stringify(errorInfo, null, 2));
+				console.log(
+					"[Deepgram] Error JSON:",
+					JSON.stringify(errorInfo, null, 2),
+				);
 
 				setError(`Realtime transcription failed. Check console for details.`);
 			});
@@ -444,7 +503,7 @@ export function NewSessionFlow({ patients, defaultPatientId }: Props) {
 					: "Unable to start recording. Please check microphone access and try again.",
 			);
 		}
-	}, []);
+	}, [unlockAudio]);
 
 	const beginSession = useCallback(() => {
 		if (calibrationStatus === "missing" || calibrationStatus === "error") {
@@ -501,7 +560,9 @@ export function NewSessionFlow({ patients, defaultPatientId }: Props) {
 					}
 				}
 
-				console.log(`[STT] Sending audio for transcription: size=${transcriptionBlob.size} bytes, type=${transcriptionBlob.type}`);
+				console.log(
+					`[STT] Sending audio for transcription: size=${transcriptionBlob.size} bytes, type=${transcriptionBlob.type}`,
+				);
 
 				const formData = new FormData();
 				const fileName =
@@ -525,31 +586,33 @@ export function NewSessionFlow({ patients, defaultPatientId }: Props) {
 
 				const result = await res.json();
 				if (!cancelled) {
-					const rawSegments = Array.isArray(result.segments) ? result.segments : [];
+					const rawSegments = Array.isArray(result.segments)
+						? result.segments
+						: [];
 					const segments = calibrationSeconds
 						? rawSegments
-							.filter(
-								(segment: { endTime?: number }) =>
-									segment.endTime === undefined ||
-									segment.endTime > calibrationSeconds,
-							)
-							.map((segment: { startTime?: number; endTime?: number }) => ({
-								...segment,
-								startTime:
-									segment.startTime !== undefined
-										? Math.max(0, segment.startTime - calibrationSeconds)
-										: undefined,
-								endTime:
-									segment.endTime !== undefined
-										? Math.max(0, segment.endTime - calibrationSeconds)
-										: undefined,
-							}))
+								.filter(
+									(segment: { endTime?: number }) =>
+										segment.endTime === undefined ||
+										segment.endTime > calibrationSeconds,
+								)
+								.map((segment: { startTime?: number; endTime?: number }) => ({
+									...segment,
+									startTime:
+										segment.startTime !== undefined
+											? Math.max(0, segment.startTime - calibrationSeconds)
+											: undefined,
+									endTime:
+										segment.endTime !== undefined
+											? Math.max(0, segment.endTime - calibrationSeconds)
+											: undefined,
+								}))
 						: rawSegments;
 
 					const finalTranscript =
 						segments.length > 0
 							? buildTranscriptFromSegments(segments)
-							: (result.text || "");
+							: result.text || "";
 					setTranscript(finalTranscript);
 					setStep("review");
 				}
@@ -588,8 +651,10 @@ export function NewSessionFlow({ patients, defaultPatientId }: Props) {
 
 			// Phase 5: Fire SOAP report generation in the background.
 			// Non-blocking — if it fails the nurse can still view the session.
-			fetch(`/api/sessions/${result.sessionId}/report`, { method: "POST" }).catch(
-				(err) => console.error("[Report] Background generation failed:", err),
+			fetch(`/api/sessions/${result.sessionId}/report`, {
+				method: "POST",
+			}).catch((err) =>
+				console.error("[Report] Background generation failed:", err),
 			);
 
 			router.push(`/dashboard/sessions/${result.sessionId}`);
@@ -657,7 +722,7 @@ export function NewSessionFlow({ patients, defaultPatientId }: Props) {
 					liveTranscript={liveTranscript}
 					interventionState={interventionState}
 					onEndIntervention={() => endIntervention("nurse_override")}
-					onTriggerIntervention={triggerIntervention}
+					onTriggerIntervention={triggerInterventionWithAudio}
 					agentSpeaking={conversation.isSpeaking}
 					conversation={conversation}
 					hostileCount={hostileCount}
@@ -787,16 +852,18 @@ function SetupStep({
 							<button
 								type="button"
 								onClick={() => onModeChange("Routine")}
-								className={`relative flex min-h-[150px] flex-col items-center gap-3 rounded-2xl border-2 p-6 text-center transition-colors ${mode === "Routine"
-									? "border-primary bg-primary/5"
-									: "border-border hover:border-muted-foreground/30"
-									}`}
+								className={`relative flex min-h-[150px] flex-col items-center gap-3 rounded-2xl border-2 p-6 text-center transition-colors ${
+									mode === "Routine"
+										? "border-primary bg-primary/5"
+										: "border-border hover:border-muted-foreground/30"
+								}`}
 							>
 								<div
-									className={`flex size-10 items-center justify-center rounded-full ${mode === "Routine"
-										? "bg-primary/10 text-primary"
-										: "bg-muted text-muted-foreground"
-										}`}
+									className={`flex size-10 items-center justify-center rounded-full ${
+										mode === "Routine"
+											? "bg-primary/10 text-primary"
+											: "bg-muted text-muted-foreground"
+									}`}
 								>
 									<HugeiconsIcon icon={Stethoscope02Icon} size={20} />
 								</div>
@@ -809,16 +876,18 @@ function SetupStep({
 							<button
 								type="button"
 								onClick={() => onModeChange("Intervention")}
-								className={`relative flex min-h-[150px] flex-col items-center gap-3 rounded-2xl border-2 p-6 text-center transition-colors ${mode === "Intervention"
-									? "border-primary bg-primary/5"
-									: "border-border hover:border-muted-foreground/30"
-									}`}
+								className={`relative flex min-h-[150px] flex-col items-center gap-3 rounded-2xl border-2 p-6 text-center transition-colors ${
+									mode === "Intervention"
+										? "border-primary bg-primary/5"
+										: "border-border hover:border-muted-foreground/30"
+								}`}
 							>
 								<div
-									className={`flex size-10 items-center justify-center rounded-full ${mode === "Intervention"
-										? "bg-primary/10 text-primary"
-										: "bg-muted text-muted-foreground"
-										}`}
+									className={`flex size-10 items-center justify-center rounded-full ${
+										mode === "Intervention"
+											? "bg-primary/10 text-primary"
+											: "bg-muted text-muted-foreground"
+									}`}
 								>
 									<HugeiconsIcon icon={HeadphonesIcon} size={20} />
 								</div>
@@ -900,7 +969,8 @@ function CalibrationStep({
 }) {
 	const canContinue = calibrationStatus === "ready";
 	const showSkip = !canContinue;
-	const isBusy = calibrationStatus === "loading" || calibrationStatus === "saving";
+	const isBusy =
+		calibrationStatus === "loading" || calibrationStatus === "saving";
 	const hasClip = !!calibrationAudioUrl;
 	const [showOverwriteDialog, setShowOverwriteDialog] = useState(false);
 
@@ -945,7 +1015,11 @@ function CalibrationStep({
 
 					<div className="flex flex-wrap items-center gap-2">
 						{calibrationRecording ? (
-							<Button size="sm" variant="destructive" onClick={onCalibrationStop}>
+							<Button
+								size="sm"
+								variant="destructive"
+								onClick={onCalibrationStop}
+							>
 								Stop Recording
 							</Button>
 						) : (
@@ -1069,10 +1143,20 @@ function RecordingStep({
 						</p>
 					</div>
 					<div className="flex items-center gap-2">
-						<Button size="sm" variant="outline" className="border-amber-400 bg-amber-100/50 text-amber-800 hover:bg-amber-100" onClick={onTriggerIntervention}>
+						<Button
+							size="sm"
+							variant="outline"
+							className="border-amber-400 bg-amber-100/50 text-amber-800 hover:bg-amber-100"
+							onClick={onTriggerIntervention}
+						>
 							Trigger Now
 						</Button>
-						<Button size="sm" variant="ghost" className="text-amber-700" onClick={onEndIntervention}>
+						<Button
+							size="sm"
+							variant="ghost"
+							className="text-amber-700"
+							onClick={onEndIntervention}
+						>
 							Cancel
 						</Button>
 					</div>
@@ -1087,7 +1171,9 @@ function RecordingStep({
 							<span className="relative inline-flex size-2.5 rounded-full bg-emerald-500" />
 						</span>
 						<p className="text-sm font-medium text-emerald-800 dark:text-emerald-200">
-							{agentSpeaking ? "Agent is speaking…" : "Intervention Active — listening"}
+							{agentSpeaking
+								? "Agent is speaking…"
+								: "Intervention Active — listening"}
 						</p>
 					</div>
 					<Button size="sm" variant="destructive" onClick={onEndIntervention}>
@@ -1099,7 +1185,9 @@ function RecordingStep({
 			{interventionState === "cooldown" && (
 				<div className="flex items-center gap-2 rounded-lg border border-muted bg-muted/40 px-4 py-3">
 					<span className="size-2 rounded-full bg-muted-foreground/40" />
-					<p className="text-xs text-muted-foreground">Intervention cooldown active</p>
+					<p className="text-xs text-muted-foreground">
+						Intervention cooldown active
+					</p>
 				</div>
 			)}
 
@@ -1180,7 +1268,9 @@ function RecordingStep({
 								<div className="h-1 w-full rounded-full bg-muted overflow-hidden">
 									<div
 										className="h-full bg-orange-500 transition-all"
-										style={{ width: `${Math.min(100, (hostileCount / 1) * 100)}%` }}
+										style={{
+											width: `${Math.min(100, (hostileCount / 1) * 100)}%`,
+										}}
 									/>
 								</div>
 							</div>
@@ -1193,13 +1283,15 @@ function RecordingStep({
 									{conversation.status}
 								</p>
 								{conversation.isSpeaking && (
-									<p className="text-[10px] text-green-500 animate-pulse font-bold">● AGENT IS SPEAKING</p>
+									<p className="text-[10px] text-green-500 animate-pulse font-bold">
+										● AGENT IS SPEAKING
+									</p>
 								)}
 							</div>
 
 							<div className="col-span-2">
 								<p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-1">
-									Classifier "Last Heard"
+									Classifier &quot;Last Heard&quot;
 								</p>
 								<div className="rounded bg-muted/50 p-2 text-xs font-mono text-muted-foreground break-words">
 									{liveTranscript || "Listening for triggers..."}

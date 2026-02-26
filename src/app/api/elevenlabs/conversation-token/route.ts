@@ -16,11 +16,12 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json();
-    const { patientFirstName, nurseFirstName, lovedOneRelation, voiceId } = body as {
+    const { patientFirstName, nurseFirstName, lovedOneRelation, voiceId, connectionType } = body as {
         patientFirstName: string;
         nurseFirstName: string;
         lovedOneRelation: string;
         voiceId: string | null;
+        connectionType?: "webrtc" | "websocket";
     };
 
     if (!patientFirstName || !nurseFirstName || !lovedOneRelation) {
@@ -30,28 +31,41 @@ export async function POST(request: Request) {
         );
     }
 
-    console.log(`[ElevenLabs] Generating signed URL for nurse: ${session.user.id}, patient: ${patientFirstName}`);
+    const resolvedConnectionType = connectionType === "websocket" ? "websocket" : "webrtc";
+    console.log(`[ElevenLabs] Generating ${resolvedConnectionType} auth for nurse: ${session.user.id}, patient: ${patientFirstName}`);
 
     try {
-        // Correct path for the current SDK version (2.36.0+)
-        // Overrides will be handled on the client-side for better reliability
-        const response = await elevenlabs.conversationalAi.conversations.getSignedUrl({
-            agentId: AGENT_ID,
-        });
+        if (resolvedConnectionType === "websocket") {
+            const response = await elevenlabs.conversationalAi.conversations.getSignedUrl({
+                agentId: AGENT_ID,
+            });
 
-        // The SDK returns ConversationSignedUrlResponseModel which has signedUrl
-        const signedUrl = (response as any).signedUrl || (response as any).signed_url;
+            const signedUrl = (response as any).signedUrl || (response as any).signed_url;
+            if (!signedUrl) {
+                console.error("[ElevenLabs] Invalid response data - missing signedUrl:", response);
+                throw new Error("No signed URL in response");
+            }
 
-        if (!signedUrl) {
-            console.error("[ElevenLabs] Invalid response data - missing signedUrl:", response);
-            throw new Error("No signed URL in response");
+            console.log(`[ElevenLabs] Signed URL successfully generated for intervention`);
+            return NextResponse.json({ signedUrl, connectionType: "websocket" });
         }
 
-        console.log(`[ElevenLabs] Signed URL successfully generated for intervention`);
+        const response = await elevenlabs.conversationalAi.conversations.getWebrtcToken({
+            agentId: AGENT_ID,
+            participantName: session.user.id,
+        });
 
-        return NextResponse.json({ signedUrl });
+        const token = (response as any).token;
+
+        if (!token) {
+            console.error("[ElevenLabs] Invalid response data - missing token:", response);
+            throw new Error("No token in response");
+        }
+
+        console.log(`[ElevenLabs] WebRTC token successfully generated for intervention`);
+        return NextResponse.json({ token, connectionType: "webrtc" });
     } catch (error: any) {
-        console.error("[ElevenLabs] Failed to generate signed URL:", error);
+        console.error("[ElevenLabs] Failed to generate conversation auth:", error);
         return NextResponse.json(
             { error: error.message || "Failed to generate token" },
             { status: 500 }
