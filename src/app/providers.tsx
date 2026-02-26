@@ -10,7 +10,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
 
   return (
     <NeonAuthUIProvider
-      authClient={authClient}
+      authClient={authClient as any}
       navigate={router.push}
       replace={router.replace}
       onSessionChange={router.refresh}
