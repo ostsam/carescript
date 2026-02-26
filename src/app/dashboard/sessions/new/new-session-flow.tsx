@@ -501,6 +501,8 @@ export function NewSessionFlow({ patients, defaultPatientId }: Props) {
 					}
 				}
 
+				console.log(`[STT] Sending audio for transcription: size=${transcriptionBlob.size} bytes, type=${transcriptionBlob.type}`);
+
 				const formData = new FormData();
 				const fileName =
 					transcriptionBlob.type === "audio/wav"
@@ -1054,12 +1056,17 @@ function RecordingStep({
 							<span className="relative inline-flex size-2.5 rounded-full bg-amber-500" />
 						</span>
 						<p className="text-sm font-medium text-amber-800 dark:text-amber-200">
-							Intervention pending — activating in 10 seconds…
+							Safety delay active — activating in 3 seconds…
 						</p>
 					</div>
-					<Button size="sm" variant="outline" className="border-amber-400 text-amber-700" onClick={onEndIntervention}>
-						Cancel
-					</Button>
+					<div className="flex items-center gap-2">
+						<Button size="sm" variant="outline" className="border-amber-400 bg-amber-100/50 text-amber-800 hover:bg-amber-100" onClick={onTriggerIntervention}>
+							Trigger Now
+						</Button>
+						<Button size="sm" variant="ghost" className="text-amber-700" onClick={onEndIntervention}>
+							Cancel
+						</Button>
+					</div>
 				</div>
 			)}
 

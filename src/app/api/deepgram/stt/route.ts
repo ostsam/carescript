@@ -33,8 +33,19 @@ export async function POST(req: NextRequest) {
 
   const audioField = formData.get("audio");
   if (!audioField || !(audioField instanceof Blob)) {
+    console.error("[STT] audio field is missing or not a Blob");
     return NextResponse.json(
       { error: "audio field is required and must be a file" },
+      { status: 400 },
+    );
+  }
+
+  console.log(`[STT] Received audio: size=${audioField.size} bytes, type=${audioField.type}`);
+
+  if (audioField.size === 0) {
+    console.error("[STT] Received empty audio blob");
+    return NextResponse.json(
+      { error: "Audio file is empty" },
       { status: 400 },
     );
   }
@@ -62,8 +73,13 @@ export async function POST(req: NextRequest) {
     });
 
     return NextResponse.json(result);
-  } catch (err) {
-    console.error("[STT] Deepgram transcription error:", err);
+  } catch (err: any) {
+    console.error("[STT] Deepgram transcription error details:", {
+      message: err.message,
+      name: err.name,
+      status: err.status,
+      details: err.details || err.err_msg || "No extra details",
+    });
     return NextResponse.json(
       { error: "Transcription failed" },
       { status: 502 },

@@ -34,7 +34,7 @@ export interface InterventionControllerOptions {
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const ROLLING_WINDOW_SIZE = 5; // number of patient utterances to evaluate
-const TRIGGER_DELAY_MS = 10_000; // 10-second wait before activating
+const TRIGGER_DELAY_MS = 3_000; // 3-second wait before activating
 const COOLDOWN_MS = 105_000; // ~1m45s cooldown after intervention ends
 const HOSTILITY_THRESHOLD = 1; // min hostile turns needed to trigger
 
@@ -186,11 +186,12 @@ export function useInterventionController({
     // ─── Trigger pending ───────────────────────────────────────────────────────
 
     const scheduleTrigger = useCallback(() => {
-        if (pendingTimerRef.current) return; // already pending
+        console.warn("[Intervention] Hostility threshold reached! Summoning agent in 3 seconds...");
         transitionTo("trigger_pending");
 
         pendingTimerRef.current = setTimeout(() => {
             pendingTimerRef.current = null;
+            console.log("[Intervention] 3s Delay up - Starting ElevenLabs Session...");
             void startIntervention();
         }, TRIGGER_DELAY_MS);
     }, [transitionTo, startIntervention]);
@@ -236,6 +237,7 @@ export function useInterventionController({
             }
 
             const hostileCount = rollingWindowRef.current.filter(isHostileUtterance).length;
+            console.log(`[Intervention] Segment analyzed: "${text}" | Hostile: ${hostile} | Rolling Hostile Count: ${hostileCount}`);
 
             // State-specific logic
             if (state === "monitoring") {

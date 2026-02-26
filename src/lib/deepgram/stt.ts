@@ -36,13 +36,6 @@ export interface TranscribeResult {
 
 /**
  * Transcribe a completed audio recording with Deepgram Nova-3.
- *
- * Pipeline role — Ambient Scribe mode (post-call refinement):
- *   1. Nurse ends the passive recording session
- *   2. Client POSTs the audio blob to /api/deepgram/stt
- *   3. This function transcribes it (Nova-3 — high accuracy, diarization)
- *   4. The transcript is PII-sanitized by aegis-shield before VibeFlow sees it
- *   5. VibeFlow extracts SOAP facts; result is saved to clinical_notes
  */
 export async function transcribeAudio({
 	audio,
@@ -52,18 +45,28 @@ export async function transcribeAudio({
 	const buffer = Buffer.from(await audio.arrayBuffer());
 	const language = languageCode ?? "en";
 
+	// Note: Nova-3 uses 'keyterm', Nova-2 uses 'keywords'
+	const options: any = {
+		model: STT_MODEL,
+		language,
+		diarize: true,
+		smart_format: true,
+		punctuate: true,
+		utterances: true,
+		filler_words: true,
+	};
+
+	if (keyterms.length > 0) {
+		if (STT_MODEL.includes("nova-3")) {
+			options.keyterm = keyterms;
+		} else {
+			options.keywords = keyterms;
+		}
+	}
+
 	const { result, error } = await deepgram.listen.prerecorded.transcribeFile(
 		buffer,
-		{
-			model: STT_MODEL,
-			language,
-			diarize: true,
-			smart_format: true,
-			punctuate: true,
-			utterances: true,
-			filler_words: true,
-			keyterm: keyterms.length > 0 ? keyterms : undefined,
-		},
+		options,
 	);
 
 	if (error) {
@@ -76,11 +79,11 @@ export async function transcribeAudio({
 	const text =
 		utterances.length > 0
 			? utterances
-					.map(
-						(u) =>
-							`Speaker ${((u.speaker ?? 0) + 1).toString()}: ${u.transcript}`,
-					)
-					.join("\n")
+				.map(
+					(u) =>
+						`Speaker ${((u.speaker ?? 0) + 1).toString()}: ${u.transcript}`,
+				)
+				.join("\n")
 			: (alternative?.transcript ?? "");
 
 	const segments: TranscriptSegment[] = (alternative?.words ?? []).map((w) => ({
