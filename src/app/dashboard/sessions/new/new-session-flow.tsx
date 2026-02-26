@@ -323,7 +323,7 @@ export function NewSessionFlow({ patients, defaultPatientId }: Props) {
 			const tokenBody = await tokenRes.json();
 			const dgClient = createClient(tokenBody.token);
 			const connection = dgClient.listen.live({
-				model: "nova-3",
+				model: "nova-2",
 				language: "en",
 				diarize: true,
 				punctuate: true,
@@ -337,6 +337,7 @@ export function NewSessionFlow({ patients, defaultPatientId }: Props) {
 			deepgramReadyRef.current = false;
 
 			connection.on(LiveTranscriptionEvents.Open, () => {
+				console.log("[Deepgram] Connection established");
 				deepgramReadyRef.current = true;
 				if (pendingChunksRef.current.length > 0) {
 					pendingChunksRef.current.forEach((chunk) => connection.send(chunk));
@@ -345,6 +346,7 @@ export function NewSessionFlow({ patients, defaultPatientId }: Props) {
 			});
 
 			connection.on(LiveTranscriptionEvents.Close, () => {
+				console.log("[Deepgram] Connection closed");
 				deepgramReadyRef.current = false;
 				deepgramConnectionRef.current = null;
 				if (liveStatusRef.current !== "recording") {
@@ -353,11 +355,14 @@ export function NewSessionFlow({ patients, defaultPatientId }: Props) {
 			});
 
 			connection.on(LiveTranscriptionEvents.Transcript, (data) => {
-				const alternative = data.channel?.alternatives?.[0];
+				const alternatives = data.channel?.alternatives || data.results?.channels?.[0]?.alternatives;
+				const alternative = alternatives?.[0];
 				const text = alternative?.transcript?.trim();
+
 				if (!text) return;
 
 				if (data.is_final) {
+					console.log("[Deepgram] Final segment:", text);
 					finalTranscriptRef.current = finalTranscriptRef.current
 						? `${finalTranscriptRef.current} ${text}`
 						: text;
@@ -366,11 +371,13 @@ export function NewSessionFlow({ patients, defaultPatientId }: Props) {
 
 					// Feed final segments into the intervention classifier
 					const words = alternative?.words;
-					const speakerLabel = words?.[0]?.speaker !== undefined
-						? `speaker_${words[0].speaker}`
+					const speakerNum = words?.[0]?.speaker;
+					const speakerLabel = speakerNum !== undefined
+						? `speaker_${speakerNum}`
 						: undefined;
 					processSegment({ text, speaker: speakerLabel, timestamp: Date.now() });
 				} else {
+					// Interim result
 					setLiveTranscript(text);
 					setTranscript(
 						finalTranscriptRef.current
