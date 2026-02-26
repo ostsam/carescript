@@ -4,7 +4,7 @@ import Link from "next/link";
 import "./auth.css";
 
 type AuthShellProps = {
-	variant: "sign-in" | "sign-up";
+	variant: "sign-in" | "sign-up" | "forgot-password";
 	children: React.ReactNode;
 };
 
@@ -25,6 +25,13 @@ const copy = {
 		panelLabel: "Create Account",
 		panelNote: "Protected by Aegis Shield. Privacy-first by design.",
 		quote: "Built for the defining moments of care.",
+	},
+	"forgot-password": {
+		eyebrow: "Account Recovery",
+		title: "Reset your",
+		emphasis: "password.",
+		subtitle:
+			"Enter your email and we'll send you a link to regain access to your clinical workspace.",
 	},
 };
 
