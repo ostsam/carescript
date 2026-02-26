@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
+import { sql as drizzleSql } from "drizzle-orm";
 
 type NurseProfile = {
 	userId: string;
@@ -9,13 +10,21 @@ type NurseProfile = {
 };
 
 type PatientProfile = {
+	orgId: string;
 	nurseId: string;
 	patientFirstName: string;
 	patientLastName: string;
+	dateOfBirth: string;
+	sex: string;
+	codeStatus: string;
+	admitDate: string;
+	roomLabel: string;
+	bedLabel: string;
+	primaryPayor: string;
 	lovedOneFirstName: string;
 	lovedOneLastName: string;
 	lovedOneRelation: string;
-	elevenlabsVoiceId: string;
+	elevenlabsVoiceId: string | null;
 };
 
 const DEFAULT_ORG_NAME = "Sunrise Care";
@@ -161,12 +170,58 @@ const lovedOneRelations = [
 	"Spouse",
 	"Daughter",
 	"Son",
-	"Sister",
-	"Brother",
-	"Partner",
-	"Grandchild",
 	"Friend",
+	"Sibling",
+	"Other",
 ];
+
+const sexOptions = ["Female", "Male", "Other"];
+const codeStatusOptions = ["Full Code", "DNR", "DNI"];
+const payorOptions = ["Medicare", "Medicaid", "Private", "Managed Care"];
+
+const diagnosisCatalog = [
+	{ description: "Hypertension", icd10Code: "I10" },
+	{ description: "Type 2 diabetes mellitus", icd10Code: "E11.9" },
+	{ description: "Osteoarthritis", icd10Code: "M19.90" },
+	{ description: "Chronic kidney disease, stage 3", icd10Code: "N18.30" },
+	{ description: "Mild cognitive impairment", icd10Code: "G31.84" },
+	{ description: "Congestive heart failure", icd10Code: "I50.9" },
+];
+
+const allergyCatalog = [
+	{ substance: "Penicillin", reaction: "Rash", severity: "Moderate" },
+	{ substance: "Sulfa drugs", reaction: "Hives", severity: "Mild" },
+	{ substance: "Latex", reaction: "Irritation", severity: "Low" },
+	{ substance: "Shellfish", reaction: "Swelling", severity: "Severe" },
+];
+
+const medicationCatalog = [
+	{ name: "Lisinopril", dose: "10 mg", route: "PO", frequency: "Daily" },
+	{ name: "Metformin", dose: "500 mg", route: "PO", frequency: "BID" },
+	{ name: "Atorvastatin", dose: "20 mg", route: "PO", frequency: "Nightly" },
+	{ name: "Furosemide", dose: "20 mg", route: "PO", frequency: "Daily" },
+	{ name: "Acetaminophen", dose: "650 mg", route: "PO", frequency: "PRN" },
+];
+
+function pickFrom<T>(items: T[], index: number): T {
+	return items[index % items.length];
+}
+
+function makeDobFromAge(age: number, seed: number): string {
+	const date = new Date();
+	date.setFullYear(date.getFullYear() - age);
+	date.setMonth(seed % 12);
+	date.setDate(((seed * 7) % 28) + 1);
+	return date.toISOString().slice(0, 10);
+}
+
+function daysAgo(days: number) {
+	return new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+}
+
+function daysAgoDateOnly(days: number): string {
+	return daysAgo(days).toISOString().slice(0, 10);
+}
 
 function makeTranscriptText(
 	patient: PatientProfile,
@@ -249,8 +304,33 @@ async function main() {
 	const sql = neon(process.env.NEON_DATABASE_URL!);
 	const db = drizzle(sql, { schema });
 
-	const { organizations, nurses, patients, transcripts, clinicalNotes } =
-		schema;
+	const {
+		organizations,
+		nurses,
+		patients,
+		transcripts,
+		clinicalNotes,
+		patientDiagnoses,
+		patientAllergies,
+		patientMedications,
+		patientVitals,
+	} = schema;
+
+	await db.execute(
+		drizzleSql`
+		TRUNCATE TABLE
+			${organizations},
+			${nurses},
+			${patients},
+			${transcripts},
+			${clinicalNotes},
+			${patientDiagnoses},
+			${patientAllergies},
+			${patientMedications},
+			${patientVitals}
+		RESTART IDENTITY CASCADE
+		`,
+	);
 
 	const [org] = await db
 		.insert(organizations)
@@ -306,14 +386,28 @@ async function main() {
 				lovedOneLastNames[patientIndex % lovedOneLastNames.length];
 			const lovedOneRelation =
 				lovedOneRelations[patientIndex % lovedOneRelations.length];
+			const age = 72 + (patientIndex % 22);
+			const dateOfBirth = makeDobFromAge(age, patientIndex);
+			const admitDate = daysAgoDateOnly(12 + (patientIndex * 13) % 420);
+			const roomNumber = 100 + (patientIndex % 40);
+			const roomLabel = `${roomNumber}`;
+			const bedLabel = patientIndex % 2 === 0 ? "A" : "B";
 			patientProfiles.push({
+				orgId: org.id,
 				nurseId,
 				patientFirstName,
 				patientLastName,
+				dateOfBirth,
+				sex: pickFrom(sexOptions, patientIndex),
+				codeStatus: pickFrom(codeStatusOptions, patientIndex),
+				admitDate,
+				roomLabel,
+				bedLabel,
+				primaryPayor: pickFrom(payorOptions, patientIndex),
 				lovedOneFirstName,
 				lovedOneLastName,
 				lovedOneRelation,
-				elevenlabsVoiceId: `voice_${randomUUID()}`,
+				elevenlabsVoiceId: null,
 			});
 			patientIndex += 1;
 		}
@@ -323,9 +417,16 @@ async function main() {
 		.insert(patients)
 		.values(
 			patientProfiles.map((patient, idx) => ({
-				orgId: org.id,
+				orgId: patient.orgId,
 				patientFirstName: patient.patientFirstName,
 				patientLastName: patient.patientLastName,
+				dateOfBirth: patient.dateOfBirth,
+				sex: patient.sex,
+				codeStatus: patient.codeStatus,
+				admitDate: patient.admitDate,
+				roomLabel: patient.roomLabel,
+				bedLabel: patient.bedLabel,
+				primaryPayor: patient.primaryPayor,
 				lovedOneFirstName: patient.lovedOneFirstName,
 				lovedOneLastName: patient.lovedOneLastName,
 				lovedOneRelation: patient.lovedOneRelation,
@@ -338,6 +439,77 @@ async function main() {
 	const patientsWithIds = insertedPatients.map((row, idx) => ({
 		...patientProfiles[idx],
 		id: row.id,
+	}));
+
+	const diagnosisRows = patientsWithIds.flatMap((patient, idx) => {
+		const primary = pickFrom(diagnosisCatalog, idx);
+		const secondary = pickFrom(diagnosisCatalog, idx + 2);
+		return [
+			{
+				patientId: patient.id,
+				description: primary.description,
+				icd10Code: primary.icd10Code,
+				isPrimary: true,
+				createdAt: daysAgo(40 + idx),
+			},
+			{
+				patientId: patient.id,
+				description: secondary.description,
+				icd10Code: secondary.icd10Code,
+				isPrimary: false,
+				createdAt: daysAgo(30 + idx),
+			},
+		];
+	});
+
+	const allergyRows = patientsWithIds.map((patient, idx) => {
+		const allergy = pickFrom(allergyCatalog, idx);
+		return {
+			patientId: patient.id,
+			substance: allergy.substance,
+			reaction: allergy.reaction,
+			severity: allergy.severity,
+			recordedAt: daysAgo(90 + idx),
+		};
+	});
+
+	const medicationRows = patientsWithIds.flatMap((patient, idx) => {
+		const primaryMed = pickFrom(medicationCatalog, idx);
+		const secondaryMed = pickFrom(medicationCatalog, idx + 1);
+		return [
+			{
+				patientId: patient.id,
+				name: primaryMed.name,
+				dose: primaryMed.dose,
+				route: primaryMed.route,
+				frequency: primaryMed.frequency,
+				startAt: daysAgo(120 + idx),
+				endAt: null,
+				createdAt: daysAgo(120 + idx),
+			},
+			{
+				patientId: patient.id,
+				name: secondaryMed.name,
+				dose: secondaryMed.dose,
+				route: secondaryMed.route,
+				frequency: secondaryMed.frequency,
+				startAt: daysAgo(90 + idx),
+				endAt: null,
+				createdAt: daysAgo(90 + idx),
+			},
+		];
+	});
+
+	const vitalRows = patientsWithIds.map((patient, idx) => ({
+		patientId: patient.id,
+		measuredAt: daysAgo(idx % 7),
+		bpSystolic: 118 + (idx % 18),
+		bpDiastolic: 68 + (idx % 10),
+		heartRate: 66 + (idx % 18),
+		respRate: 14 + (idx % 6),
+		tempC: 36.4 + (idx % 5) * 0.1,
+		spo2: 94 + (idx % 5),
+		weightKg: 60 + (idx % 20),
 	}));
 
 	const transcriptRows = patientsWithIds.map((patient, idx) => {
@@ -373,6 +545,10 @@ async function main() {
 	});
 
 	await db.insert(clinicalNotes).values(clinicalNoteRows);
+	await db.insert(patientDiagnoses).values(diagnosisRows);
+	await db.insert(patientAllergies).values(allergyRows);
+	await db.insert(patientMedications).values(medicationRows);
+	await db.insert(patientVitals).values(vitalRows);
 
 	const adminUsers = nurseProfiles.filter(
 		(profile) => profile.label === "admin",
@@ -387,6 +563,10 @@ async function main() {
 	console.log(`Patients: ${patientsWithIds.length}`);
 	console.log(`Transcripts: ${insertedTranscripts.length}`);
 	console.log(`Clinical notes: ${clinicalNoteRows.length}`);
+	console.log(`Diagnoses: ${diagnosisRows.length}`);
+	console.log(`Allergies: ${allergyRows.length}`);
+	console.log(`Medications: ${medicationRows.length}`);
+	console.log(`Vitals: ${vitalRows.length}`);
 	console.log(
 		"Admin user IDs:",
 		adminUsers.map((admin) => admin.userId).join(", "),

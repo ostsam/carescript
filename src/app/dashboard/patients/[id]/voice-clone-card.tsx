@@ -50,6 +50,8 @@ interface VoiceCloneCardProps {
 	voiceId: string | null;
 }
 
+const VOICE_SAMPLE_PASSAGE =
+	"When the warm sun rose, I quietly packed a small bag, made fresh tea, and walked down the narrow path to the garden. We watched quick brown birds dart over the blue pond and listened to the soft splash of water on smooth stones. A cool breeze brushed my cheek as we talked about music, family, and the week ahead. I paused to read a short note, cleared my throat, and hummed a gentle tune. Then I said, slowly and clearly, “It will be a good day. You are safe. I’m right here.” Later, I counted seven books on the shelf, laughed at a silly joke, and described the bright colors of the sky, pink, gold, and deep violet. Do you remember that quiet place? We can always go there together.";
 export function VoiceCloneCard({
 	patientId,
 	patientFirstName,
@@ -65,6 +67,7 @@ export function VoiceCloneCard({
 	const [nameLast, setNameLast] = useState(lovedOneLastName);
 	const [nameError, setNameError] = useState<string | null>(null);
 	const [nameSaved, setNameSaved] = useState(false);
+	const [editingName, setEditingName] = useState(false);
 
 	const [recording, setRecording] = useState(false);
 	const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
@@ -195,9 +198,17 @@ export function VoiceCloneCard({
 				return;
 			}
 			setNameSaved(true);
+			setEditingName(false);
 			router.refresh();
 			setTimeout(() => setNameSaved(false), 2500);
 		});
+	}
+
+	function handleCancelNameEdit() {
+		setNameFirst(lovedOneFirstName);
+		setNameLast(lovedOneLastName);
+		setNameError(null);
+		setEditingName(false);
 	}
 
 	function handleDeleteVoice() {
@@ -273,9 +284,21 @@ export function VoiceCloneCard({
 					<div className="space-y-3">
 						<div className="flex items-center justify-between">
 							<p className="text-sm font-medium">Loved one name</p>
-							{nameSaved && (
-								<span className="text-xs text-emerald-600">Saved</span>
-							)}
+							<div className="flex items-center gap-2">
+								{nameSaved && (
+									<span className="text-xs text-emerald-600">Saved</span>
+								)}
+								{!editingName && (
+									<Button
+										variant="ghost"
+										size="sm"
+										className="rounded-full"
+										onClick={() => setEditingName(true)}
+									>
+										Edit name
+									</Button>
+								)}
+							</div>
 						</div>
 						<div className="grid gap-3 sm:grid-cols-2">
 							<div className="space-y-1.5">
@@ -285,6 +308,7 @@ export function VoiceCloneCard({
 									value={nameFirst}
 									onChange={(e) => setNameFirst(e.target.value)}
 									placeholder="First name"
+									disabled={!editingName || isPending}
 								/>
 							</div>
 							<div className="space-y-1.5">
@@ -294,21 +318,35 @@ export function VoiceCloneCard({
 									value={nameLast}
 									onChange={(e) => setNameLast(e.target.value)}
 									placeholder="Last name"
+									disabled={!editingName || isPending}
 								/>
 							</div>
 						</div>
 						{nameError && (
 							<p className="text-xs text-destructive">{nameError}</p>
 						)}
-						<Button
-							variant="outline"
-							size="sm"
-							className="rounded-full"
-							onClick={handleSaveName}
-							disabled={isPending}
-						>
-							{isPending ? "Saving…" : "Update name"}
-						</Button>
+						{editingName && (
+							<div className="flex items-center gap-2">
+								<Button
+									variant="outline"
+									size="sm"
+									className="rounded-full"
+									onClick={handleSaveName}
+									disabled={isPending}
+								>
+									{isPending ? "Saving…" : "Update name"}
+								</Button>
+								<Button
+									variant="ghost"
+									size="sm"
+									className="rounded-full"
+									onClick={handleCancelNameEdit}
+									disabled={isPending}
+								>
+									Cancel
+								</Button>
+							</div>
+						)}
 					</div>
 
 					<div className="flex flex-wrap items-center justify-between gap-3">
@@ -333,6 +371,14 @@ export function VoiceCloneCard({
 										sample improves quality.
 									</DialogDescription>
 								</DialogHeader>
+								<div className="rounded-lg border bg-muted/30 p-3 text-sm text-muted-foreground">
+									<p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+										Please read this out loud at a calm, natural pace{" "}
+									</p>
+									<p className="mt-2 text-lg text-foreground">
+										{VOICE_SAMPLE_PASSAGE}
+									</p>
+								</div>
 								<div className="grid gap-4">
 									<div
 										className="rounded-xl border bg-muted/30 p-4"
