@@ -281,7 +281,6 @@ export function NewSessionFlow({ patients, defaultPatientId }: Props) {
 
 	const startDisabled =
 		!selectedPatientId ||
-		mode !== "Routine" ||
 		calibrationStatus === "loading" ||
 		calibrationStatus === "saving";
 
@@ -789,11 +788,6 @@ function SetupStep({
 									: "border-border hover:border-muted-foreground/30"
 									}`}
 							>
-								{mode === "Intervention" && (
-									<Badge className="absolute top-2 right-2 bg-amber-500 text-white text-[9px] px-1.5">
-										Coming Soon
-									</Badge>
-								)}
 								<div
 									className={`flex size-10 items-center justify-center rounded-full ${mode === "Intervention"
 										? "bg-primary/10 text-primary"
@@ -825,19 +819,7 @@ function SetupStep({
 						</div>
 					)}
 
-					{/* Intervention coming-soon message */}
-					{mode === "Intervention" && (
-						<div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-center dark:border-amber-900 dark:bg-amber-950/30">
-							<p className="text-sm font-medium text-amber-800 dark:text-amber-200">
-								Intervention mode is coming soon
-							</p>
-							<p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
-								The real-time voice pipeline (STT, VibeFlow translation, and TTS
-								with the loved one&apos;s cloned voice) is under active
-								development.
-							</p>
-						</div>
-					)}
+					{/* Error */}
 				</CardContent>
 				<CardFooter className="flex items-center justify-end border-t px-6 py-5">
 					<div className="flex w-full flex-col items-end gap-2 sm:w-auto">
