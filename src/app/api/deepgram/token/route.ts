@@ -13,6 +13,8 @@ export async function POST() {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  console.log(`[Deepgram] Issuing token for user: ${session.user.id}`);
+
   const { result, error } = await deepgram.auth.grantToken({
     ttl_seconds: 3600,
   });
@@ -24,6 +26,8 @@ export async function POST() {
       { status: 502 },
     );
   }
+
+  console.log(`[Deepgram] Token successfully issued for user: ${session.user.id}`);
 
   return NextResponse.json({
     token: result.access_token,

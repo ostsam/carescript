@@ -30,6 +30,8 @@ export async function POST(request: Request) {
         );
     }
 
+    console.log(`[ElevenLabs] Generating signed URL for nurse: ${session.user.id}, patient: ${patientFirstName}`);
+
     try {
         // Generate a signed URL — expires in 15 minutes, never exposes the API key to the client
         const response = await (elevenlabs as any).conversationalAi.agents.getSignedUrl({
@@ -41,6 +43,8 @@ export async function POST(request: Request) {
         if (!signedUrl) {
             throw new Error("ElevenLabs did not return a signed URL");
         }
+
+        console.log(`[ElevenLabs] Signed URL successfully generated for intervention`);
 
         return NextResponse.json({ signedUrl });
     } catch (err) {

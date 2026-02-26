@@ -29,10 +29,15 @@ export async function GET() {
 		return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 	}
 
+	console.log(`[Calibration] GET request for nurse: ${session.user.id}`);
+
 	const row = await fetchCalibrationRow(session.user.id);
 	if (!row?.calibration_audio_blob) {
+		console.log(`[Calibration] No clip found for nurse: ${session.user.id} (Returning 204)`);
 		return new NextResponse(null, { status: 204 });
 	}
+
+	console.log(`[Calibration] Found clip for nurse: ${session.user.id}, size: ${row.calibration_audio_blob.length} bytes`);
 
 	const mimeType = row.calibration_audio_mime_type || "application/octet-stream";
 	const body =
@@ -91,11 +96,13 @@ export async function POST(req: NextRequest) {
 		(Array.isArray(result.rows) ? result.rows.length : 0);
 
 	if (!updatedCount) {
+		console.error(`[Calibration] POST failed: Nurse record not found for user: ${session.user.id}`);
 		return NextResponse.json(
 			{ error: "Could not find nurse record" },
 			{ status: 404 },
 		);
 	}
 
+	console.log(`[Calibration] Successfully updated clip for nurse: ${session.user.id}`);
 	return NextResponse.json({ success: true });
 }

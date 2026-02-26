@@ -39,6 +39,7 @@ export async function POST(
     }
 
     const { id: transcriptId } = await params;
+    console.log(`[Report] Starting clinical note generation for transcript: ${transcriptId}`);
 
     if (!transcriptId) {
         return NextResponse.json({ error: "Missing transcript ID" }, { status: 400 });
@@ -74,12 +75,14 @@ export async function POST(
     });
 
     if (existingNotes.length > 0) {
+        console.log(`[Report] Note already exists for transcript: ${transcriptId}, skipping generation`);
         return NextResponse.json(
             { error: "Clinical note already exists for this session" },
             { status: 409 }
         );
     }
 
+    console.log(`[Report] Fetching AI completion for patient: ${row.patientFirstName} ${row.patientLastName}`);
     const contextHeader = `Patient: ${row.patientFirstName} ${row.patientLastName}\nSession Type: ${row.interactionType}\n\nTRANSCRIPT:\n${row.rawTranscript}`;
 
     try {
@@ -125,6 +128,8 @@ export async function POST(
                     status: clinicalNotes.status,
                 });
         });
+
+        console.log(`[Report] Successfully generated and saved clinical note: ${inserted.id}`);
 
         return NextResponse.json({
             noteId: inserted.id,
