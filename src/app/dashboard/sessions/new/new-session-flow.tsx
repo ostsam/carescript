@@ -42,6 +42,10 @@ import {
 	useCalibrationClip,
 	type CalibrationStatus,
 } from "@/components/calibration/use-calibration-clip";
+import {
+	useInterventionController,
+	type InterventionState,
+} from "@/hooks/use-intervention-controller";
 import { type PatientOption } from "../actions";
 import { saveSession } from "../actions";
 
@@ -233,6 +237,7 @@ export function NewSessionFlow({ patients, defaultPatientId }: Props) {
 	const [liveTranscript, setLiveTranscript] = useState("");
 	const [error, setError] = useState<string | null>(null);
 	const [saving, setSaving] = useState(false);
+	const [interventionState, setInterventionState] = useState<InterventionState>("monitoring");
 
 	const {
 		status: calibrationStatus,
@@ -257,6 +262,22 @@ export function NewSessionFlow({ patients, defaultPatientId }: Props) {
 	const liveStatusRef = useRef<"idle" | "recording" | "stopping">("idle");
 
 	const selectedPatient = patients.find((p) => p.id === selectedPatientId);
+
+	// ── Intervention controller (after selectedPatient is declared) ───────────
+	const patientContext = selectedPatient
+		? {
+			patientFirstName: selectedPatient.firstName,
+			nurseFirstName: "Nurse", // TODO: pull from auth session when available
+			lovedOneRelation: selectedPatient.lovedOneRelation ?? "loved one",
+			elevenlabsVoiceId: selectedPatient.elevenlabsVoiceId ?? null,
+		}
+		: null;
+
+	const { processSegment, endIntervention, conversation } = useInterventionController({
+		patientContext,
+		onStateChange: setInterventionState,
+	});
+
 	const startDisabled =
 		!selectedPatientId ||
 		mode !== "Routine" ||
@@ -276,14 +297,14 @@ export function NewSessionFlow({ patients, defaultPatientId }: Props) {
 		};
 	}, []);
 
-  const startRecording = useCallback(async () => {
-    try {
-      setError(null);
-      setTranscript("");
-      setLiveTranscript("");
-      finalTranscriptRef.current = "";
-      liveStatusRef.current = "recording";
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+	const startRecording = useCallback(async () => {
+		try {
+			setError(null);
+			setTranscript("");
+			setLiveTranscript("");
+			finalTranscriptRef.current = "";
+			liveStatusRef.current = "recording";
+			const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
 			const preferredMimeType = MediaRecorder.isTypeSupported(
 				"audio/webm;codecs=opus",
 			)
@@ -342,6 +363,13 @@ export function NewSessionFlow({ patients, defaultPatientId }: Props) {
 						: text;
 					setTranscript(finalTranscriptRef.current);
 					setLiveTranscript("");
+
+					// Feed final segments into the intervention classifier
+					const words = alternative?.words;
+					const speakerLabel = words?.[0]?.speaker !== undefined
+						? `speaker_${words[0].speaker}`
+						: undefined;
+					processSegment({ text, speaker: speakerLabel, timestamp: Date.now() });
 				} else {
 					setLiveTranscript(text);
 					setTranscript(
@@ -477,22 +505,22 @@ export function NewSessionFlow({ patients, defaultPatientId }: Props) {
 					const rawSegments = Array.isArray(result.segments) ? result.segments : [];
 					const segments = calibrationSeconds
 						? rawSegments
-								.filter(
-									(segment: { endTime?: number }) =>
-										segment.endTime === undefined ||
-										segment.endTime > calibrationSeconds,
-								)
-								.map((segment: { startTime?: number; endTime?: number }) => ({
-									...segment,
-									startTime:
-										segment.startTime !== undefined
-											? Math.max(0, segment.startTime - calibrationSeconds)
-											: undefined,
-									endTime:
-										segment.endTime !== undefined
-											? Math.max(0, segment.endTime - calibrationSeconds)
-											: undefined,
-								}))
+							.filter(
+								(segment: { endTime?: number }) =>
+									segment.endTime === undefined ||
+									segment.endTime > calibrationSeconds,
+							)
+							.map((segment: { startTime?: number; endTime?: number }) => ({
+								...segment,
+								startTime:
+									segment.startTime !== undefined
+										? Math.max(0, segment.startTime - calibrationSeconds)
+										: undefined,
+								endTime:
+									segment.endTime !== undefined
+										? Math.max(0, segment.endTime - calibrationSeconds)
+										: undefined,
+							}))
 						: rawSegments;
 
 					const finalTranscript =
@@ -559,43 +587,46 @@ export function NewSessionFlow({ patients, defaultPatientId }: Props) {
 				</Button>
 			</div>
 
-				{step === "setup" && (
-					<SetupStep
-						patients={patients}
-						selectedPatientId={selectedPatientId}
-						onPatientChange={setSelectedPatientId}
-						mode={mode}
-						onModeChange={setMode}
-						onStart={beginSession}
-						startDisabled={startDisabled}
-						calibrationStatus={calibrationStatus}
-						error={error}
-						selectedPatient={selectedPatient}
-					/>
-				)}
+			{step === "setup" && (
+				<SetupStep
+					patients={patients}
+					selectedPatientId={selectedPatientId}
+					onPatientChange={setSelectedPatientId}
+					mode={mode}
+					onModeChange={setMode}
+					onStart={beginSession}
+					startDisabled={startDisabled}
+					calibrationStatus={calibrationStatus}
+					error={error}
+					selectedPatient={selectedPatient}
+				/>
+			)}
 
-				{step === "calibration" && (
-					<CalibrationStep
-						calibrationStatus={calibrationStatus}
-						calibrationRecording={calibrationRecording}
-						calibrationError={calibrationError}
-						calibrationAudioUrl={calibrationAudioUrl}
-						onCalibrationStart={startCalibrationRecording}
-						onCalibrationStop={stopCalibrationRecording}
-						onContinue={continueToRecording}
-						onSkip={skipCalibration}
-						onBack={() => setStep("setup")}
-					/>
-				)}
+			{step === "calibration" && (
+				<CalibrationStep
+					calibrationStatus={calibrationStatus}
+					calibrationRecording={calibrationRecording}
+					calibrationError={calibrationError}
+					calibrationAudioUrl={calibrationAudioUrl}
+					onCalibrationStart={startCalibrationRecording}
+					onCalibrationStop={stopCalibrationRecording}
+					onContinue={continueToRecording}
+					onSkip={skipCalibration}
+					onBack={() => setStep("setup")}
+				/>
+			)}
 
-				{step === "recording" && (
-					<RecordingStep
+			{step === "recording" && (
+				<RecordingStep
 					patient={selectedPatient!}
 					mode={mode}
 					elapsed={elapsed}
 					formatTime={formatTime}
 					onStop={stopRecording}
 					transcript={transcript || liveTranscript}
+					interventionState={interventionState}
+					onEndIntervention={() => void endIntervention("nurse_override")}
+					agentSpeaking={conversation.isSpeaking}
 				/>
 			)}
 
@@ -614,16 +645,16 @@ export function NewSessionFlow({ patients, defaultPatientId }: Props) {
 					onSave={handleSave}
 					saving={saving}
 					error={error}
-						onRestart={() => {
-							setStep("setup");
-							setAudioBlob(null);
-							setTranscript("");
-							setLiveTranscript("");
-							setElapsed(0);
-							setError(null);
-						}}
-					/>
-				)}
+					onRestart={() => {
+						setStep("setup");
+						setAudioBlob(null);
+						setTranscript("");
+						setLiveTranscript("");
+						setElapsed(0);
+						setError(null);
+					}}
+				/>
+			)}
 		</>
 	);
 }
@@ -722,18 +753,16 @@ function SetupStep({
 							<button
 								type="button"
 								onClick={() => onModeChange("Routine")}
-								className={`relative flex min-h-[150px] flex-col items-center gap-3 rounded-2xl border-2 p-6 text-center transition-colors ${
-									mode === "Routine"
-										? "border-primary bg-primary/5"
-										: "border-border hover:border-muted-foreground/30"
-								}`}
+								className={`relative flex min-h-[150px] flex-col items-center gap-3 rounded-2xl border-2 p-6 text-center transition-colors ${mode === "Routine"
+									? "border-primary bg-primary/5"
+									: "border-border hover:border-muted-foreground/30"
+									}`}
 							>
 								<div
-									className={`flex size-10 items-center justify-center rounded-full ${
-										mode === "Routine"
-											? "bg-primary/10 text-primary"
-											: "bg-muted text-muted-foreground"
-									}`}
+									className={`flex size-10 items-center justify-center rounded-full ${mode === "Routine"
+										? "bg-primary/10 text-primary"
+										: "bg-muted text-muted-foreground"
+										}`}
 								>
 									<HugeiconsIcon icon={Stethoscope02Icon} size={20} />
 								</div>
@@ -746,11 +775,10 @@ function SetupStep({
 							<button
 								type="button"
 								onClick={() => onModeChange("Intervention")}
-								className={`relative flex min-h-[150px] flex-col items-center gap-3 rounded-2xl border-2 p-6 text-center transition-colors ${
-									mode === "Intervention"
-										? "border-primary bg-primary/5"
-										: "border-border hover:border-muted-foreground/30"
-								}`}
+								className={`relative flex min-h-[150px] flex-col items-center gap-3 rounded-2xl border-2 p-6 text-center transition-colors ${mode === "Intervention"
+									? "border-primary bg-primary/5"
+									: "border-border hover:border-muted-foreground/30"
+									}`}
 							>
 								{mode === "Intervention" && (
 									<Badge className="absolute top-2 right-2 bg-amber-500 text-white text-[9px] px-1.5">
@@ -758,11 +786,10 @@ function SetupStep({
 									</Badge>
 								)}
 								<div
-									className={`flex size-10 items-center justify-center rounded-full ${
-										mode === "Intervention"
-											? "bg-primary/10 text-primary"
-											: "bg-muted text-muted-foreground"
-									}`}
+									className={`flex size-10 items-center justify-center rounded-full ${mode === "Intervention"
+										? "bg-primary/10 text-primary"
+										: "bg-muted text-muted-foreground"
+										}`}
 								>
 									<HugeiconsIcon icon={HeadphonesIcon} size={20} />
 								</div>
@@ -900,20 +927,20 @@ function CalibrationStep({
 					</div>
 
 					<div className="flex flex-wrap items-center gap-2">
-					{calibrationRecording ? (
-						<Button size="sm" variant="destructive" onClick={onCalibrationStop}>
-							Stop Recording
-						</Button>
-					) : (
-						<Button
-							size="sm"
-							variant="outline"
-							onClick={handleStartRecording}
-							disabled={isBusy}
-						>
-							{canContinue ? "Re-record Calibration" : "Record Calibration"}
-						</Button>
-					)}
+						{calibrationRecording ? (
+							<Button size="sm" variant="destructive" onClick={onCalibrationStop}>
+								Stop Recording
+							</Button>
+						) : (
+							<Button
+								size="sm"
+								variant="outline"
+								onClick={handleStartRecording}
+								disabled={isBusy}
+							>
+								{canContinue ? "Re-record Calibration" : "Record Calibration"}
+							</Button>
+						)}
 
 						<span className="text-xs text-muted-foreground">
 							{calibrationStatus === "ready" && "Calibration ready"}
@@ -988,6 +1015,9 @@ function RecordingStep({
 	formatTime,
 	onStop,
 	transcript,
+	interventionState,
+	onEndIntervention,
+	agentSpeaking,
 }: {
 	patient: PatientOption;
 	mode: string;
@@ -995,73 +1025,120 @@ function RecordingStep({
 	formatTime: (s: number) => string;
 	onStop: () => void;
 	transcript: string;
+	interventionState?: InterventionState;
+	onEndIntervention?: () => void;
+	agentSpeaking?: boolean;
 }) {
 	return (
-		<Card>
-			<CardContent className="flex flex-col items-center gap-6 py-10">
-				{/* Header */}
-				<div className="text-center">
-					<h2 className="text-lg font-semibold">Recording Session</h2>
-					<p className="text-sm text-muted-foreground mt-1">
-						{patient.firstName} {patient.lastName} &middot;{" "}
-						<Badge variant="secondary" className="text-[10px]">
-							{mode}
-						</Badge>
-					</p>
+		<>
+			{/* ── Intervention status banner ──────────────────────────────────── */}
+			{interventionState === "trigger_pending" && (
+				<div className="flex items-center justify-between gap-3 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 dark:border-amber-800 dark:bg-amber-950/40">
+					<div className="flex items-center gap-2">
+						<span className="relative flex size-2.5">
+							<span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-amber-400 opacity-75" />
+							<span className="relative inline-flex size-2.5 rounded-full bg-amber-500" />
+						</span>
+						<p className="text-sm font-medium text-amber-800 dark:text-amber-200">
+							Intervention pending — activating in 10 seconds…
+						</p>
+					</div>
+					<Button size="sm" variant="outline" className="border-amber-400 text-amber-700" onClick={onEndIntervention}>
+						Cancel
+					</Button>
 				</div>
+			)}
 
-				{/* Pulsing indicator + timer */}
-				<div className="flex flex-col items-center gap-3">
-					<div className="relative flex size-16 items-center justify-center">
-						<span className="absolute inset-0 animate-ping rounded-full bg-red-400/30" />
-						<span className="relative flex size-12 items-center justify-center rounded-full bg-red-500 text-white">
-							<HugeiconsIcon icon={Mic01Icon} size={24} />
+			{interventionState === "active" && (
+				<div className="flex items-center justify-between gap-3 rounded-lg border border-emerald-400 bg-emerald-50 px-4 py-3 dark:border-emerald-700 dark:bg-emerald-950/40">
+					<div className="flex items-center gap-2">
+						<span className="relative flex size-2.5">
+							<span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+							<span className="relative inline-flex size-2.5 rounded-full bg-emerald-500" />
+						</span>
+						<p className="text-sm font-medium text-emerald-800 dark:text-emerald-200">
+							{agentSpeaking ? "Agent is speaking…" : "Intervention Active — listening"}
+						</p>
+					</div>
+					<Button size="sm" variant="destructive" onClick={onEndIntervention}>
+						End Intervention
+					</Button>
+				</div>
+			)}
+
+			{interventionState === "cooldown" && (
+				<div className="flex items-center gap-2 rounded-lg border border-muted bg-muted/40 px-4 py-3">
+					<span className="size-2 rounded-full bg-muted-foreground/40" />
+					<p className="text-xs text-muted-foreground">Intervention cooldown active</p>
+				</div>
+			)}
+
+			<Card>
+				<CardContent className="flex flex-col items-center gap-6 py-10">
+					{/* Header */}
+					<div className="text-center">
+						<h2 className="text-lg font-semibold">Recording Session</h2>
+						<p className="text-sm text-muted-foreground mt-1">
+							{patient.firstName} {patient.lastName} &middot;{" "}
+							<Badge variant="secondary" className="text-[10px]">
+								{mode}
+							</Badge>
+						</p>
+					</div>
+
+					{/* Pulsing indicator + timer */}
+					<div className="flex flex-col items-center gap-3">
+						<div className="relative flex size-16 items-center justify-center">
+							<span className="absolute inset-0 animate-ping rounded-full bg-red-400/30" />
+							<span className="relative flex size-12 items-center justify-center rounded-full bg-red-500 text-white">
+								<HugeiconsIcon icon={Mic01Icon} size={24} />
+							</span>
+						</div>
+						<span className="font-mono text-2xl tabular-nums tracking-wider">
+							{formatTime(elapsed)}
 						</span>
 					</div>
-					<span className="font-mono text-2xl tabular-nums tracking-wider">
-						{formatTime(elapsed)}
-					</span>
-				</div>
 
-				{/* Waveform */}
-				<div className="w-full max-w-lg">
-					<MicrophoneWaveform
-						active
-						height={80}
-						barColor="hsl(var(--primary))"
-						barWidth={3}
-						barGap={2}
-						barRadius={2}
-						sensitivity={1.4}
-					/>
-				</div>
-
-				<p className="text-xs text-muted-foreground max-w-sm text-center">
-					Recording ambient audio. Speak naturally — the transcription engine
-					handles speaker diarization automatically.
-				</p>
-
-				{transcript && (
-					<div className="w-full max-w-lg rounded-lg border bg-muted/30 px-4 py-3 text-sm leading-relaxed">
-						<p className="text-xs uppercase tracking-wide text-muted-foreground mb-2">
-							Live Transcript
-						</p>
-						<p className="whitespace-pre-wrap">{transcript}</p>
+					{/* Waveform */}
+					<div className="w-full max-w-lg">
+						<MicrophoneWaveform
+							active
+							height={80}
+							barColor="hsl(var(--primary))"
+							barWidth={3}
+							barGap={2}
+							barRadius={2}
+							sensitivity={1.4}
+						/>
 					</div>
-				)}
 
-				{/* Stop button */}
-				<Button
-					size="lg"
-					variant="destructive"
-					className="rounded-full min-w-40"
-					onClick={onStop}
-				>
-					<HugeiconsIcon icon={StopIcon} data-icon="inline-start" />
-					Stop Recording
-				</Button>
-			</CardContent>
-		</Card>
+					<p className="text-xs text-muted-foreground max-w-sm text-center">
+						Recording ambient audio. Speak naturally — the transcription engine
+						handles speaker diarization automatically.
+					</p>
+
+					{transcript && (
+						<div className="w-full max-w-lg rounded-lg border bg-muted/30 px-4 py-3 text-sm leading-relaxed">
+							<p className="text-xs uppercase tracking-wide text-muted-foreground mb-2">
+								Live Transcript
+							</p>
+							<p className="whitespace-pre-wrap">{transcript}</p>
+						</div>
+					)}
+
+					{/* Stop button */}
+					<Button
+						size="lg"
+						variant="destructive"
+						className="rounded-full min-w-40"
+						onClick={onStop}
+					>
+						<HugeiconsIcon icon={StopIcon} data-icon="inline-start" />
+						Stop Recording
+					</Button>
+				</CardContent>
+			</Card>
+		</>
 	);
 }
 

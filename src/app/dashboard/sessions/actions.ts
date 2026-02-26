@@ -11,6 +11,8 @@ export type PatientOption = {
   firstName: string;
   lastName: string;
   hasVoice: boolean;
+  lovedOneRelation: string | null;
+  elevenlabsVoiceId: string | null;
 };
 
 export async function getPatientList(): Promise<PatientOption[]> {
@@ -24,6 +26,8 @@ export async function getPatientList(): Promise<PatientOption[]> {
         firstName: patients.patientFirstName,
         lastName: patients.patientLastName,
         hasVoice: sql<boolean>`${patients.elevenlabsVoiceId} IS NOT NULL`,
+        lovedOneRelation: patients.lovedOneRelation,
+        elevenlabsVoiceId: patients.elevenlabsVoiceId,
       })
       .from(patients)
       .orderBy(patients.patientLastName, patients.patientFirstName);
@@ -34,6 +38,8 @@ export async function getPatientList(): Promise<PatientOption[]> {
     firstName: r.firstName,
     lastName: r.lastName,
     hasVoice: r.hasVoice,
+    lovedOneRelation: r.lovedOneRelation ?? null,
+    elevenlabsVoiceId: r.elevenlabsVoiceId ?? null,
   }));
 }
 
