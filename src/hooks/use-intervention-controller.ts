@@ -254,6 +254,8 @@ export function useInterventionController({
         processSegment,
         /** Nurse kill-switch — immediately ends any active or pending intervention */
         endIntervention,
+        /** Nurse manual override — immediately starts intervention from monitoring state */
+        triggerIntervention: scheduleTrigger,
         /** Current state of the state machine (as a ref for use inside event handlers) */
         stateRef: interventionState,
         /** ElevenLabs conversation object — exposes isSpeaking, status, etc. */

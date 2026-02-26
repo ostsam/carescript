@@ -273,7 +273,7 @@ export function NewSessionFlow({ patients, defaultPatientId }: Props) {
 		}
 		: null;
 
-	const { processSegment, endIntervention, conversation } = useInterventionController({
+	const { processSegment, endIntervention, triggerIntervention, conversation } = useInterventionController({
 		patientContext,
 		onStateChange: setInterventionState,
 	});
@@ -562,6 +562,13 @@ export function NewSessionFlow({ patients, defaultPatientId }: Props) {
 			if (!result.success) {
 				throw new Error(result.error);
 			}
+
+			// Phase 5: Fire SOAP report generation in the background.
+			// Non-blocking — if it fails the nurse can still view the session.
+			fetch(`/api/sessions/${result.sessionId}/report`, { method: "POST" }).catch(
+				(err) => console.error("[Report] Background generation failed:", err),
+			);
+
 			router.push(`/dashboard/sessions/${result.sessionId}`);
 		} catch (err) {
 			setError(err instanceof Error ? err.message : "Failed to save session");
@@ -626,6 +633,7 @@ export function NewSessionFlow({ patients, defaultPatientId }: Props) {
 					transcript={transcript || liveTranscript}
 					interventionState={interventionState}
 					onEndIntervention={() => void endIntervention("nurse_override")}
+					onTriggerIntervention={triggerIntervention}
 					agentSpeaking={conversation.isSpeaking}
 				/>
 			)}
@@ -1017,6 +1025,7 @@ function RecordingStep({
 	transcript,
 	interventionState,
 	onEndIntervention,
+	onTriggerIntervention,
 	agentSpeaking,
 }: {
 	patient: PatientOption;
@@ -1027,6 +1036,7 @@ function RecordingStep({
 	transcript: string;
 	interventionState?: InterventionState;
 	onEndIntervention?: () => void;
+	onTriggerIntervention?: () => void;
 	agentSpeaking?: boolean;
 }) {
 	return (
@@ -1126,16 +1136,30 @@ function RecordingStep({
 						</div>
 					)}
 
-					{/* Stop button */}
-					<Button
-						size="lg"
-						variant="destructive"
-						className="rounded-full min-w-40"
-						onClick={onStop}
-					>
-						<HugeiconsIcon icon={StopIcon} data-icon="inline-start" />
-						Stop Recording
-					</Button>
+					{/* Action buttons */}
+					<div className="flex flex-col items-center gap-3 w-full">
+						<Button
+							size="lg"
+							variant="destructive"
+							className="rounded-full min-w-40"
+							onClick={onStop}
+						>
+							<HugeiconsIcon icon={StopIcon} data-icon="inline-start" />
+							Stop Recording
+						</Button>
+
+						{/* Manual nurse-initiated intervention trigger */}
+						{(interventionState === "monitoring") && (
+							<Button
+								size="sm"
+								variant="outline"
+								className="rounded-full border-orange-400 text-orange-700 hover:bg-orange-50 dark:border-orange-600 dark:text-orange-400"
+								onClick={onTriggerIntervention}
+							>
+								Trigger Intervention
+							</Button>
+						)}
+					</div>
 				</CardContent>
 			</Card>
 		</>
